@@ -22,7 +22,12 @@ interface Pokemon {
 }
 
 const MAX_EMOJIS = 30;
-const AUTHOR_NAME = 'ͲႮᏆᎫᏴᏆᎪᏞΝᎪᎫᎪᎻ·Kҽɳƈԋσ Aʅʅιαɳƈҽ';
+const AUTHORS = [
+  "ͲႮᏆᎫᏴᏆᎪᏞΝᎪᎫᎪᎻ·Kҽɳƈԋσ Aʅʅιαɳƈҽ",
+  "if you steal my sticker then you're gay/lesbian. Don't you dare baka 😭 ( Tuijbialnajah-frieren-paglu-flat-boobs-lover )",
+  "Tuijbialnajah-frieren-paglu-flat-boobs-lover",
+  "Powered by Kҽɳƈԋσ Aʅʅιαɳƈҽ"
+];
 
 const PRESETS = [
   { name: "Most Powerful", ids: [150, 384, 493, 483, 484, 487, 382, 383, 249, 250, 888, 889, 890, 1007, 1008, 144, 145, 146, 243, 244, 245, 373, 445, 635, 706, 784, 887, 998, 1005, 151] },
@@ -49,6 +54,7 @@ const PokemonStickerPacker: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPokemon, setSelectedPokemon] = useState<Pokemon[]>([]);
   const [packName, setPackName] = useState('My Pokemon Pack');
+  const [selectedAuthor, setSelectedAuthor] = useState(AUTHORS[0]);
   const [statusMessage, setStatusMessage] = useState('');
   const [progress, setProgress] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -209,7 +215,7 @@ const PokemonStickerPacker: React.FC = () => {
         "sticker_packs": [{
           "identifier": `poke_pack_${Date.now()}`,
           "name": packName.substring(0, 128),
-          "publisher": AUTHOR_NAME.substring(0, 128),
+          "publisher": selectedAuthor.substring(0, 128),
           "tray_image_file": "tray.png",
           "image_data_version": "1",
           "avoid_cache": false,
@@ -224,7 +230,7 @@ const PokemonStickerPacker: React.FC = () => {
       zip.file('tray.png', trayBlob);
       zip.file('contents.json', JSON.stringify(metadata, null, 2));
       zip.file('title.txt', packName);
-      zip.file('author.txt', AUTHOR_NAME);
+      zip.file('author.txt', selectedAuthor);
       webpBlobs.forEach((blob, i) => zip.file(`${i + 1}.webp`, blob));
 
       const zipBlob = await zip.generateAsync({ type: 'blob', mimeType: 'application/octet-stream', compression: "STORE" });
@@ -431,6 +437,21 @@ const PokemonStickerPacker: React.FC = () => {
                     className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-yellow-500 outline-none transition-all font-medium"
                     placeholder="E.g. Legendary Pack"
                   />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Author</label>
+                  <select
+                    value={selectedAuthor}
+                    onChange={(e) => setSelectedAuthor(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-yellow-500 outline-none transition-all font-medium"
+                  >
+                    {AUTHORS.map((author, idx) => (
+                      <option key={idx} value={author}>
+                        {author.length > 40 ? author.substring(0, 40) + '...' : author}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <button

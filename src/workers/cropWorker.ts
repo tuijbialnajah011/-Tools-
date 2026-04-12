@@ -38,7 +38,7 @@ self.onmessage = (e) => {
   
   if (Math.abs(imgRatio - targetRatio) > 0.01) {
     if (imgRatio > targetRatio) {
-      cropW = Math.round(height * targetRatio);
+      cropW = Math.max(1, Math.round(height * targetRatio));
       cropH = height;
       
       const colSums = new Float32Array(width);
@@ -64,7 +64,7 @@ self.onmessage = (e) => {
       cropX = bestX;
     } else {
       cropW = width;
-      cropH = Math.round(width / targetRatio);
+      cropH = Math.max(1, Math.round(width / targetRatio));
       
       const rowSums = new Float32Array(height);
       for (let y = 0; y < height; y++) {

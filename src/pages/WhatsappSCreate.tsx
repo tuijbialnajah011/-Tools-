@@ -6,6 +6,13 @@ import CropWorker from "../workers/cropWorker?worker";
 
 const STICKERS_PER_PACK = 30;
 
+const AUTHORS = [
+  "ͲႮᏆᎫᏴᏆᎪᏞΝΑᎫΑΉ·Kҽɳƈԋσ Aʅʅιαɳƈҽ",
+  "if you steal my sticker then you're gay/lesbian. Don't you dare baka 😭 ( Tuijbialnajah-frieren-paglu-flat-boobs-lover )",
+  "Tuijbialnajah-frieren-paglu-flat-boobs-lover",
+  "Powered by Kҽɳƈԋσ Aʅʅιαɳƈҽ"
+];
+
 const Step1Design = () => (
   <div className="w-full max-w-xs aspect-[4/3] bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 flex flex-col gap-3 overflow-hidden relative mx-auto">
     <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
@@ -97,6 +104,7 @@ export function WhatsappSCreate() {
   const [resultPacks, setResultPacks] = useState<PackResult[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [packNames, setPackNames] = useState<string[]>(["My Sticker Pack"]);
+  const [selectedAuthor, setSelectedAuthor] = useState<string>(AUTHORS[0]);
   const [showInstructions, setShowInstructions] = useState(false);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   
@@ -235,8 +243,8 @@ export function WhatsappSCreate() {
         
         // Scale down for energy calculation (faster)
         const scale = Math.min(1, 256 / Math.max(img.width, img.height));
-        const w = Math.round(img.width * scale);
-        const h = Math.round(img.height * scale);
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
         
         const canvas = document.createElement('canvas');
         canvas.width = w;
@@ -249,25 +257,36 @@ export function WhatsappSCreate() {
         
         // Use transferable for performance
         const cropResult = await new Promise<{cropX: number, cropY: number, cropW: number, cropH: number}>((resolve) => {
-          worker.onmessage = (e) => resolve(e.data);
+          const handler = (e: MessageEvent) => {
+            if (e.data.id === sticker.id) {
+              worker.removeEventListener('message', handler);
+              resolve(e.data);
+            }
+          };
+          worker.addEventListener('message', handler);
           worker.postMessage({ id: sticker.id, imageData, targetRatio }, [imageData.data.buffer]);
         });
         
         const cropX = cropResult.cropX / scale;
         const cropY = cropResult.cropY / scale;
-        const cropW = cropResult.cropW / scale;
-        const cropH = cropResult.cropH / scale;
+        const cropW = Math.max(1, cropResult.cropW / scale);
+        const cropH = Math.max(1, cropResult.cropH / scale);
+        
+        // Scale down final cropped image to max 512x512 to prevent OOM and freezing
+        const finalScale = Math.min(1, 512 / Math.max(cropW, cropH));
+        const finalW = Math.max(1, Math.round(cropW * finalScale));
+        const finalH = Math.max(1, Math.round(cropH * finalScale));
         
         const outCanvas = document.createElement('canvas');
-        outCanvas.width = cropW;
-        outCanvas.height = cropH;
+        outCanvas.width = finalW;
+        outCanvas.height = finalH;
         const outCtx = outCanvas.getContext('2d');
         if (outCtx) {
-          outCtx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+          outCtx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, finalW, finalH);
           
-          const blob = await new Promise<Blob | null>((resolve) => outCanvas.toBlob(resolve, sticker.file.type, 0.9));
+          const blob = await new Promise<Blob | null>((resolve) => outCanvas.toBlob(resolve, 'image/webp', 0.9));
           if (blob) {
-            const newFile = new File([blob], sticker.file.name, { type: sticker.file.type });
+            const newFile = new File([blob], sticker.file.name.replace(/\.[^/.]+$/, "") + ".webp", { type: 'image/webp' });
             newStickers[index] = {
               id: Math.random().toString(36).substring(7),
               file: newFile,
@@ -287,15 +306,38 @@ export function WhatsappSCreate() {
 
     try {
       const tasks = stickers.map((sticker, i) => ({ sticker, i }));
-      const activePromises: Promise<void>[] = [];
       
-      for (let i = 0; i < tasks.length; i++) {
-        const worker = workers[i % workerCount];
-        const promise = processSticker(tasks[i].sticker, tasks[i].i, worker);
-        activePromises.push(promise);
-      }
+      // Process in batches to avoid freezing the UI thread with too many concurrent canvas operations
+      const concurrencyLimit = workerCount;
+      let activeCount = 0;
+      let currentIndex = 0;
       
-      await Promise.all(activePromises);
+      await new Promise<void>((resolve, reject) => {
+        const next = () => {
+          if (currentIndex >= tasks.length && activeCount === 0) {
+            resolve();
+            return;
+          }
+          
+          while (activeCount < concurrencyLimit && currentIndex < tasks.length) {
+            const task = tasks[currentIndex++];
+            activeCount++;
+            
+            const worker = workers[task.i % workerCount];
+            processSticker(task.sticker, task.i, worker)
+              .then(() => {
+                activeCount--;
+                next();
+              })
+              .catch(err => {
+                reject(err);
+              });
+          }
+        };
+        
+        next();
+      });
+      
       setStickers(newStickers.filter(Boolean));
     } catch (err) {
       console.error("Cropping error:", err);
@@ -358,7 +400,7 @@ export function WhatsappSCreate() {
         const packStickers = stickers.slice(startIdx, endIdx);
 
         zip.file("title.txt", currentPackName.trim() || "My Sticker Pack");
-        zip.file("author.txt", "ͲႮᏆᎫᏴᏆᎪᏞΝΑᎫΑΉ·Kҽɳƈԋσ Aʅʅιαɳƈҽ");
+        zip.file("author.txt", selectedAuthor);
         
         const trayBlob = await convertToWebP(packStickers[0].file, 96);
         zip.file("tray.png", trayBlob);
@@ -549,6 +591,23 @@ export function WhatsappSCreate() {
                     />
                   </div>
                 ))}
+                
+                <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700">
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">
+                    Author / Creator
+                  </label>
+                  <select
+                    value={selectedAuthor}
+                    onChange={(e) => setSelectedAuthor(e.target.value)}
+                    className="w-full px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-green-500 outline-none transition-all dark:text-white font-medium text-sm"
+                  >
+                    {AUTHORS.map((author, idx) => (
+                      <option key={idx} value={author}>
+                        {author.length > 40 ? author.substring(0, 40) + '...' : author}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 
                 <div className="p-5 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700">
                   <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">

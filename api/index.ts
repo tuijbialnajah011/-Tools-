@@ -193,80 +193,181 @@ app.post("/api/proxy-request", async (req, res) => {
 });
 
 app.get("/api/search-duckduckgo", async (req, res) => {
+  const keyword = req.query.q as string;
+  
+  if (!keyword) {
+    return res.status(400).json({ error: "Keyword is required" });
+  }
+
+  try {
+    // 1. Get VQD token
+    const vqdRes = await fetch(`https://duckduckgo.com/?q=${encodeURIComponent(keyword)}`, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      }
+    });
+    const vqdText = await vqdRes.text();
+    
+    // More robust VQD extraction
+    const vqdMatch = vqdText.match(/vqd[=:]\s*['"]?([^&'"]+)['"]?/) || vqdText.match(/vqd=['"]([^'"]+)['"]/);
+    let vqd = vqdMatch ? vqdMatch[1] : null;
+
+    if (!vqd) {
+      console.error("Could not obtain VQD token from DuckDuckGo HTML");
+      throw new Error("Could not obtain VQD token");
+    }
+
+    let allResults: any[] = [];
+    let nextUrl = `https://duckduckgo.com/i.js?q=${encodeURIComponent(keyword)}&o=json&p=1&s=0&u=1&f=,,,&vqd=${vqd}`;
+    let debugLogs: string[] = [];
+    
+    // Fetch up to 6 pages (around 300 images)
+    for (let i = 0; i < 6; i++) {
+      if (!nextUrl) {
+        debugLogs.push(`Page ${i}: nextUrl is empty`);
+        break;
+      }
+      
+      let fetchUrl = nextUrl.startsWith('http') 
+        ? nextUrl 
+        : `https://duckduckgo.com${nextUrl.startsWith('/') ? '' : '/'}${nextUrl}`;
+        
+      if (!fetchUrl.includes('vqd=')) {
+        fetchUrl += `&vqd=${vqd}`;
+      }
+      
+      debugLogs.push(`Fetching page ${i}: ${fetchUrl}`);
+        
+      const ddgRes = await fetch(fetchUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "application/json",
+          "Referer": "https://duckduckgo.com/"
+        }
+      });
+
+      if (!ddgRes.ok) {
+        debugLogs.push(`Page ${i} failed: ${ddgRes.status}`);
+        if (i === 0) throw new Error(`DuckDuckGo i.js failed: ${ddgRes.status}`);
+        break;
+      }
+
+      const ddgData = await ddgRes.json();
+
+      if (!ddgData || !ddgData.results || ddgData.results.length === 0) {
+        debugLogs.push(`Page ${i} no results`);
+        if (i === 0) throw new Error("No results from DuckDuckGo");
+        break;
+      }
+
+      const pageResults = ddgData.results.map((r: any, idx: number) => ({
+        id: `ddg-${i}-${idx}-${Math.random().toString(36).substr(2, 9)}`,
+        url: r.image,
+        thumbnail: r.thumbnail,
+        source: r.source || "DuckDuckGo",
+        sourceUrl: r.url,
+        title: r.title || keyword,
+        width: r.width,
+        height: r.height,
+        type: 'Anime'
+      }));
+      
+      allResults = [...allResults, ...pageResults];
+      nextUrl = ddgData.next;
+      debugLogs.push(`Page ${i} success, nextUrl: ${nextUrl}`);
+    }
+
+    return res.json({ results: allResults, debugLogs });
+
+  } catch (error: any) {
+    console.error("DuckDuckGo search failed, falling back to Qwant:", error);
+    // Fallback to Qwant on any error
+    try {
+      let allQwantResults: any[] = [];
+      
+      // Fetch 4 pages of Qwant (200 results)
+      for (let page = 1; page <= 4; page++) {
+        const offset = (page - 1) * 50;
+        const qwantUrl = `https://api.qwant.com/v3/search/images?count=50&q=${encodeURIComponent(keyword)}&t=images&safesearch=1&locale=en_US&offset=${offset}&device=desktop`;
+        
+        const qwantRes = await fetch(qwantUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          }
+        });
+
+        if (qwantRes.ok) {
+          const qwantData = await qwantRes.json();
+          if (qwantData?.data?.result?.items) {
+            const pageResults = qwantData.data.result.items.map((r: any, idx: number) => ({
+              id: `qwant-fallback-${page}-${idx}`,
+              url: r.media,
+              thumbnail: r.thumbnail,
+              source: "Qwant (Fallback)",
+              sourceUrl: r.url,
+              title: r.title || keyword,
+              width: r.width,
+              height: r.height,
+              type: 'Anime'
+            }));
+            allQwantResults = [...allQwantResults, ...pageResults];
+          }
+        }
+      }
+      
+      if (allQwantResults.length > 0) {
+        return res.json({ results: allQwantResults });
+      }
+    } catch (fallbackError) {
+      console.error("Qwant fallback also failed:", fallbackError);
+    }
+    
+    return res.status(500).json({ error: "Search failed." });
+  }
+});
+
+app.get("/api/search-anime", async (req, res) => {
   const query = req.query.q as string;
   if (!query) return res.status(400).json({ error: "Query is required" });
 
   try {
-    // 1. Get the vqd token - try multiple times or different patterns
-    const tokenRes = await fetch(`https://duckduckgo.com/?q=${encodeURIComponent(query)}&t=h_`, {
+    // Extract the actual keyword from the query (e.g., "miyabi anime pfp aesthetic" -> "miyabi")
+    let keyword = query.replace(/anime pfp aesthetic/i, "").trim();
+    if (!keyword) keyword = "avatar";
+
+    // Use safebooru API as it doesn't block server IPs and has broader tags
+    const searchUrl = `https://safebooru.org/index.php?page=dapi&s=post&q=index&tags=${encodeURIComponent(keyword)}&json=1&limit=100`;
+    
+    const searchRes = await fetch(searchUrl, {
       headers: { 
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
       }
     });
-    const text = await tokenRes.text();
     
-    // Try multiple regex patterns for vqd
-    const vqdMatch = text.match(/vqd=['"]([^'"]+)['"]/) || 
-                     text.match(/vqd=([^&"']+)/) ||
-                     text.match(/\.vqd\s*=\s*['"]([^'"]+)['"]/) ||
-                     text.match(/vqd:['"]([^'"]+)['"]/);
-                     
-    if (!vqdMatch) {
-      // Fallback: try a different search URL if the first one failed to give a token
-      const fallbackRes = await fetch(`https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`);
-      const fallbackText = await fallbackRes.text();
-      const fallbackVqd = fallbackText.match(/vqd=['"]([^'"]+)['"]/);
-      if (!fallbackVqd) {
-        console.error("DDG HTML sample (first 1000 chars):", text.substring(0, 1000));
-        throw new Error("Could not find vqd token");
-      }
-      var vqd = fallbackVqd[1];
-    } else {
-      var vqd = vqdMatch[1];
+    if (!searchRes.ok) {
+      throw new Error(`Safebooru API failed: ${searchRes.status}`);
     }
-
-    // 2. Search for images (fetch multiple pages)
-    let searchUrl = `https://duckduckgo.com/i.js?l=us-en&o=json&q=${encodeURIComponent(query)}&vqd=${vqd}&f=,,,`;
-    let allResults: any[] = [];
-    const maxPages = 4; // Fetch up to ~400 images
     
-    for (let i = 0; i < maxPages; i++) {
-      if (!searchUrl) break;
-      
-      const searchRes = await fetch(searchUrl, {
-        headers: { 
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-          "Referer": "https://duckduckgo.com/"
-        }
-      });
-      
-      if (!searchRes.ok) break;
-      
-      const data = await searchRes.json();
-      allResults = allResults.concat(data.results || []);
-      
-      if (data.next) {
-        const nextPath = data.next.startsWith('/') ? data.next : `/${data.next}`;
-        searchUrl = `https://duckduckgo.com${nextPath}`;
-      } else {
-        break;
+    const textData = await searchRes.text();
+    let data = [];
+    if (textData.trim()) {
+      try {
+        data = JSON.parse(textData);
+      } catch (e) {
+        console.error("Failed to parse Safebooru response:", textData.substring(0, 100));
       }
     }
     
-    const blockedDomains = ['pfphub.com', 'pfptown.com'];
-    const results = allResults
-      .filter((r: any) => !blockedDomains.some(domain => r.image?.includes(domain)))
-      .map((r: any) => ({
-      id: `ddg-${Math.random().toString(36).substr(2, 9)}`,
-      url: r.image,
-      thumbnail: r.thumbnail,
-      source: "DuckDuckGo",
-      sourceUrl: r.url,
-      title: r.title,
+    const results = (data || []).map((r: any) => ({
+      id: `safebooru-${r.id}`,
+      url: r.file_url,
+      thumbnail: r.preview_url || r.sample_url || r.file_url,
+      source: "safebooru.org",
+      sourceUrl: `https://safebooru.org/index.php?page=post&s=view&id=${r.id}`,
+      title: r.tags,
       width: r.width,
-      height: r.height
+      height: r.height,
+      type: 'Anime'
     }));
 
     // Remove duplicates based on URL
@@ -274,8 +375,8 @@ app.get("/api/search-duckduckgo", async (req, res) => {
 
     res.json({ results: uniqueResults });
   } catch (error: any) {
-    console.error("DDG search error:", error);
-    res.status(500).json({ error: error.message });
+    console.error("Search error (safebooru):", error);
+    res.status(500).json({ error: error.message || "Failed to search images" });
   }
 });
 
@@ -284,61 +385,44 @@ app.get("/api/search-reddit", async (req, res) => {
   if (!query) return res.status(400).json({ error: "Query is required" });
 
   try {
-    const ddgQuery = `${query} site:reddit.com`;
-    
-    // 1. Get the vqd token
-    const tokenRes = await fetch(`https://duckduckgo.com/?q=${encodeURIComponent(ddgQuery)}&t=h_`, {
-      headers: { 
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9"
-      }
-    });
-    const text = await tokenRes.text();
-    
-    const vqdMatch = text.match(/vqd=['"]([^'"]+)['"]/) || 
-                     text.match(/vqd=([^&"']+)/) ||
-                     text.match(/\.vqd\s*=\s*['"]([^'"]+)['"]/) ||
-                     text.match(/vqd:['"]([^'"]+)['"]/);
-                     
-    if (!vqdMatch) {
-      const fallbackRes = await fetch(`https://duckduckgo.com/html/?q=${encodeURIComponent(ddgQuery)}`);
-      const fallbackText = await fallbackRes.text();
-      const fallbackVqd = fallbackText.match(/vqd=['"]([^'"]+)['"]/);
-      if (!fallbackVqd) {
-        throw new Error("Could not find vqd token for Reddit search");
-      }
-      var vqd = fallbackVqd[1];
-    } else {
-      var vqd = vqdMatch[1];
-    }
-
-    // 2. Search for images
-    const searchUrl = `https://duckduckgo.com/i.js?l=us-en&o=json&q=${encodeURIComponent(ddgQuery)}&vqd=${vqd}&f=,,,`;
+    const searchUrl = `https://www.reddit.com/search.json?q=${encodeURIComponent(query)}&type=link&limit=100`;
     const searchRes = await fetch(searchUrl, {
       headers: { 
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-        "Referer": "https://duckduckgo.com/"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
       }
     });
     
     if (!searchRes.ok) {
-      throw new Error(`DDG API failed: ${searchRes.status}`);
+      throw new Error(`Reddit API failed: ${searchRes.status}`);
     }
     
     const data = await searchRes.json();
     
-    const results = (data.results || []).map((r: any) => ({
-      id: `reddit-${Math.random().toString(36).substr(2, 9)}`,
-      url: r.image,
-      thumbnail: r.thumbnail,
-      source: "Reddit",
-      sourceUrl: r.url,
-      title: r.title,
-      width: r.width,
-      height: r.height,
-      type: 'General'
-    }));
+    const results: any[] = [];
+    
+    if (data && data.data && data.data.children) {
+      for (const child of data.data.children) {
+        const post = child.data;
+        if (post && post.url && (post.url.endsWith('.jpg') || post.url.endsWith('.png') || post.url.endsWith('.jpeg'))) {
+          let thumbnail = post.thumbnail;
+          if (!thumbnail || thumbnail === 'self' || thumbnail === 'default' || thumbnail === 'image') {
+            thumbnail = post.url;
+          }
+          
+          results.push({
+            id: `reddit-${post.id}`,
+            url: post.url,
+            thumbnail: thumbnail,
+            source: `r/${post.subreddit}`,
+            sourceUrl: `https://reddit.com${post.permalink}`,
+            title: post.title,
+            width: post.preview?.images?.[0]?.source?.width || 800,
+            height: post.preview?.images?.[0]?.source?.height || 800,
+            type: 'Reddit'
+          });
+        }
+      }
+    }
       
     res.json({ results });
   } catch (error: any) {
@@ -367,7 +451,8 @@ app.get("/api/image-proxy", async (req, res) => {
 
     const fetchWithHeaders = async (url: string, headers: any) => {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      // Reduce timeout to 4s to prevent browser queue timeouts
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
       try {
         const response = await fetch(url, { 
           headers,
@@ -388,9 +473,9 @@ app.get("/api/image-proxy", async (req, res) => {
     let response: Response | null = null;
     let lastError: any = null;
 
-    const tryStrategy = async (url: string, headers: any) => {
+    const tryStrategy = async (url: string, headers?: any) => {
       try {
-        const res = await fetchWithHeaders(url, headers);
+        const res = await fetchWithHeaders(url, headers || baseHeaders);
         return res;
       } catch (e) {
         lastError = e;
@@ -398,85 +483,24 @@ app.get("/api/image-proxy", async (req, res) => {
       }
     };
 
-    // Strategy 1: With Referer
+    // Strategy 1: Direct with Referer
     response = await tryStrategy(targetUrl, {
       ...baseHeaders,
       "Referer": new URL(targetUrl).origin
     });
 
-    // Strategy 2: Without Referer
+    // Strategy 2: wsrv.nl (fastest public proxy)
     if (!response || !response.ok) {
-      const nextRes = await tryStrategy(targetUrl, baseHeaders);
-      if (nextRes) response = nextRes;
+      const proxyUrl = `https://wsrv.nl/?url=${encodeURIComponent(targetUrl)}`;
+      const nextRes = await tryStrategy(proxyUrl);
+      if (nextRes && nextRes.ok) response = nextRes;
     }
 
-    // Strategy 3: Different User-Agent (Mobile)
+    // Strategy 3: corsproxy.io
     if (!response || !response.ok) {
-      const nextRes = await tryStrategy(targetUrl, {
-        ...baseHeaders,
-        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
-        "Referer": new URL(targetUrl).origin
-      });
-      if (nextRes) response = nextRes;
-    }
-
-    // Strategy 3.5: Try HTTP instead of HTTPS (fixes some SSL/TLS issues)
-    if (!response || !response.ok) {
-      if (targetUrl.startsWith('https://')) {
-        const httpUrl = targetUrl.replace('https://', 'http://');
-        const nextRes = await tryStrategy(httpUrl, baseHeaders);
-        if (nextRes) response = nextRes;
-      }
-    }
-
-    // Strategy 4: Fallback to public proxy (weserv.nl)
-    if (!response || !response.ok) {
-      try {
-        console.log(`Trying weserv.nl fallback for ${targetUrl}`);
-        const proxyUrl = `https://wsrv.nl/?url=${encodeURIComponent(targetUrl)}`;
-        const nextRes = await fetch(proxyUrl, {
-          headers: { "User-Agent": baseHeaders["User-Agent"] }
-        });
-        if (nextRes.ok) response = nextRes;
-      } catch (e) {
-        lastError = e;
-      }
-    }
-
-    // Strategy 5: Fallback to another public proxy (corsproxy.io)
-    if (!response || !response.ok) {
-      try {
-        console.log(`Trying corsproxy.io fallback for ${targetUrl}`);
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-        const nextRes = await fetch(proxyUrl);
-        if (nextRes.ok) response = nextRes;
-      } catch (e) {
-        lastError = e;
-      }
-    }
-
-    // Strategy 6: Fallback to allorigins
-    if (!response || !response.ok) {
-      try {
-        console.log(`Trying allorigins fallback for ${targetUrl}`);
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-        const nextRes = await fetch(proxyUrl);
-        if (nextRes.ok) response = nextRes;
-      } catch (e) {
-        lastError = e;
-      }
-    }
-
-    // Strategy 7: Fallback to codetabs
-    if (!response || !response.ok) {
-      try {
-        console.log(`Trying codetabs fallback for ${targetUrl}`);
-        const proxyUrl = `https://api.codetabs.com/v1/proxy?url=${encodeURIComponent(targetUrl)}`;
-        const nextRes = await fetch(proxyUrl);
-        if (nextRes.ok) response = nextRes;
-      } catch (e) {
-        lastError = e;
-      }
+      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+      const nextRes = await tryStrategy(proxyUrl);
+      if (nextRes && nextRes.ok) response = nextRes;
     }
 
     if (!response || !response.ok) {
@@ -498,6 +522,11 @@ app.get("/api/image-proxy", async (req, res) => {
 
     const contentType = response.headers.get("content-type") || "image/jpeg";
     res.setHeader("Content-Type", contentType);
+    
+    if (req.query.download) {
+      const filename = req.query.filename || 'download';
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    }
     
     // Cache control
     res.setHeader("Cache-Control", "public, max-age=86400");

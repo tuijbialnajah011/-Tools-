@@ -102,103 +102,54 @@ app.get("/api/search-images", async (req, res) => {
   }
 });
 
-app.get("/api/search-duckduckgo", async (req, res) => {
-  const keyword = req.query.q as string;
-  const page = parseInt(req.query.page as string) || 1;
-  
-  if (!keyword) {
-    return res.status(400).json({ error: "Keyword is required" });
-  }
+app.get("/api/search-anime", async (req, res) => {
+  const query = req.query.q as string;
+  if (!query) return res.status(400).json({ error: "Query is required" });
 
   try {
-    // 1. Get VQD token
-    const vqdRes = await fetch(`https://duckduckgo.com/?q=${encodeURIComponent(keyword)}`, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    let keyword = query.replace(/anime pfp aesthetic/i, "").trim();
+    if (!keyword) keyword = "avatar";
+
+    const searchUrl = `https://safebooru.org/index.php?page=dapi&s=post&q=index&tags=${encodeURIComponent(keyword)}&json=1&limit=100`;
+    
+    const searchRes = await fetch(searchUrl, {
+      headers: { 
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
       }
     });
-    const vqdText = await vqdRes.text();
     
-    // More robust VQD extraction
-    const vqdMatch = vqdText.match(/vqd[=:]\s*['"]?([^&'"]+)['"]?/) || vqdText.match(/vqd=['"]([^'"]+)['"]/);
-    const vqd = vqdMatch ? vqdMatch[1] : null;
-
-    if (!vqd) {
-      console.error("Could not obtain VQD token from DuckDuckGo HTML");
-      throw new Error("Could not obtain VQD token");
+    if (!searchRes.ok) {
+      throw new Error(`Safebooru API failed: ${searchRes.status}`);
     }
-
-    // 2. Fetch images using VQD
-    const offset = (page - 1) * 50;
-    const ddgUrl = `https://duckduckgo.com/i.js?q=${encodeURIComponent(keyword)}&o=json&p=1&s=${offset}&u=1&f=,,,&vqd=${vqd}`;
     
-    const ddgRes = await fetch(ddgUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json",
-        "Referer": "https://duckduckgo.com/"
+    const textData = await searchRes.text();
+    let data = [];
+    if (textData.trim()) {
+      try {
+        data = JSON.parse(textData);
+      } catch (e) {
+        console.error("Failed to parse Safebooru response:", textData.substring(0, 100));
       }
-    });
-
-    if (!ddgRes.ok) {
-      throw new Error(`DuckDuckGo i.js failed: ${ddgRes.status}`);
     }
-
-    const ddgData = await ddgRes.json();
-
-    if (!ddgData || !ddgData.results || ddgData.results.length === 0) {
-      // Fallback to Qwant if DDG returns no results
-      console.log("DDG returned no results, falling back to Qwant...");
-      return res.redirect(`/api/search-images?q=${encodeURIComponent(keyword)}&page=${page}`);
-    }
-
-    const results = ddgData.results.map((r: any, idx: number) => ({
-      id: `ddg-${page}-${idx}-${Math.random().toString(36).substr(2, 9)}`,
-      url: r.image,
-      thumbnail: r.thumbnail,
-      source: r.source || "DuckDuckGo",
-      sourceUrl: r.url,
-      title: r.title || keyword,
+    
+    const results = (data || []).map((r: any) => ({
+      id: `safebooru-${r.id}`,
+      url: r.file_url,
+      thumbnail: r.preview_url || r.sample_url || r.file_url,
+      source: "safebooru.org",
+      sourceUrl: `https://safebooru.org/index.php?page=post&s=view&id=${r.id}`,
+      title: r.tags,
       width: r.width,
-      height: r.height
+      height: r.height,
+      type: 'Anime'
     }));
 
-    return res.json({ results });
+    const uniqueResults = Array.from(new Map(results.map((item: any) => [item.url, item])).values());
 
+    res.json({ results: uniqueResults });
   } catch (error: any) {
-    console.error("DuckDuckGo search failed, falling back to Qwant:", error);
-    // Fallback to Qwant on any error
-    try {
-      const offset = (page - 1) * 50;
-      const qwantUrl = `https://api.qwant.com/v3/search/images?count=50&q=${encodeURIComponent(keyword)}&t=images&safesearch=1&locale=en_US&offset=${offset}&device=desktop`;
-      
-      const qwantRes = await fetch(qwantUrl, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        }
-      });
-
-      if (qwantRes.ok) {
-        const qwantData = await qwantRes.json();
-        if (qwantData?.data?.result?.items) {
-          const results = qwantData.data.result.items.map((r: any, idx: number) => ({
-            id: `qwant-fallback-${page}-${idx}`,
-            url: r.media,
-            thumbnail: r.thumbnail,
-            source: "Qwant (Fallback)",
-            sourceUrl: r.url,
-            title: r.title || keyword,
-            width: r.width,
-            height: r.height
-          }));
-          return res.json({ results });
-        }
-      }
-    } catch (fallbackError) {
-      console.error("Qwant fallback also failed:", fallbackError);
-    }
-    
-    return res.status(500).json({ error: "Search failed." });
+    console.error("Search error (safebooru):", error);
+    res.status(500).json({ error: error.message || "Failed to search images" });
   }
 });
 

@@ -31,7 +31,7 @@ async function startServer() {
     } catch (e: any) {
       console.warn("Vite not found, falling back to static serving.", e.message);
       app.use(express.static(distPath));
-      app.get('*', (req, res) => {
+      app.get('*all', (req, res) => {
         if (fs.existsSync(indexPath)) {
           res.sendFile(indexPath);
         } else {
@@ -40,9 +40,16 @@ async function startServer() {
       });
     }
   } else {
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    // Serve static files but don't automatically serve index.html
+    app.use(express.static(distPath, { index: false }));
+    
+    app.get('*all', (req, res) => {
       if (fs.existsSync(indexPath)) {
+        // Prevent caching of index.html so updates are immediately visible
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        
         res.sendFile(indexPath, (err) => {
           if (err) {
             console.error(`Error sending index.html: ${err.message}`);

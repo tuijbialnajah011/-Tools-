@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useDeferredValue } from 'react';
 import { motion } from 'framer-motion';
 import { FileText, Upload, Download, Copy, Check, Loader2, FileUp, Settings } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -12,7 +12,10 @@ import { Document, Packer, Paragraph, TextRun } from 'docx';
 import { saveAs } from 'file-saver';
 import { generateNotes } from '../utils/summarizer';
 import { generateCinematicHTML } from '../utils/cinematicGenerator';
-import { ChevronDown, FileText as FileIcon, FileType, FileOutput, Sparkles } from 'lucide-react';
+import { InteractiveNotes, InteractiveData } from '../components/InteractiveNotes';
+import { Flowchart } from '../components/Flowchart';
+import { VisualCard } from '../components/VisualCard';
+import { ChevronDown, FileText as FileIcon, FileType, FileOutput, Sparkles, Languages } from 'lucide-react';
 
 // Set worker path to local node_modules via Vite URL import
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
@@ -30,13 +33,19 @@ export default function NotesCreate() {
   const [ocrProgress, setOcrProgress] = useState<string>('');
   const [progressPercent, setProgressPercent] = useState<number>(0);
   const [summaryLength, setSummaryLength] = useState<SummaryLength>('medium');
+  const [selectedLanguage, setSelectedLanguage] = useState<string>('English');
   const [selectedTheme, setSelectedTheme] = useState<number>(0);
   const [copied, setCopied] = useState(false);
+  const [interactiveData, setInteractiveData] = useState<InteractiveData | null>(null);
+  const [cleanNotes, setCleanNotes] = useState<string>('');
+  const [flowcharts, setFlowcharts] = useState<Record<string, { title: string, steps: string[] }>>({});
+  const [visualCards, setVisualCards] = useState<Record<string, { title: string, emoji: string, items: { icon: string, text: string }[] }>>({});
 
   const themes = [
-    'Classic Paper', 'Midnight Neon', 'Emerald Forest', 'Cyberpunk', 
-    'Royal Velvet', 'Sakura Blossom', 'Oceanic Depth', 'High Contrast'
+    'Editorial', 'Obsidian', 'Sage', 'Monochrome', 
+    'Gallery', 'Sepia', 'Midnight', 'High Contrast'
   ];
+  const languages = ['English', 'Hindi', 'Hinglish', 'Spanish', 'French', 'German'];
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
@@ -215,19 +224,31 @@ export default function NotesCreate() {
       setIsProcessing(false);
       setIsGenerating(true);
       setNotes(''); // Clear notes to show "Thinking..."
+      setCleanNotes('');
+      setInteractiveData(null);
+      setFlowcharts({});
+      setVisualCards({});
       
+      let lastUpdateTime = 0;
+      const UPDATE_INTERVAL = 500; // ms
+
       try {
         const generatedNotes = await generateNotes(extractedText, summaryLength, (currentText) => {
-          setNotes(currentText);
-          // Try to extract title on the fly
-          const titleMatch = currentText.match(/^# (.*$)/m);
-          if (titleMatch && titleMatch[1]) {
-            setGeneratedTitle(titleMatch[1].trim());
-          }
-        });
+          const now = Date.now();
+          
+          // Throttle updates to prevent lag
+          if (now - lastUpdateTime < UPDATE_INTERVAL) return;
+          lastUpdateTime = now;
+
+          processContent(currentText);
+        }, 'paste', selectedLanguage);
+        
         if (!generatedNotes) {
            setErrorMsg("Could not generate notes. The text might be too short or complex.");
         } else {
+          // Final process to ensure everything is captured
+          processContent(generatedNotes);
+          
           // Final title extraction
           const titleMatch = generatedNotes.match(/^# (.*$)/m);
           if (titleMatch && titleMatch[1]) {
@@ -240,13 +261,87 @@ export default function NotesCreate() {
       } finally {
         setIsGenerating(false);
       }
-
     } catch (error: any) {
       console.error("Document Processing Error:", error);
       setErrorMsg(`An error occurred while processing the document: ${error.message}`);
       setIsProcessing(false);
       setIsGenerating(false);
     }
+  };
+
+  const processContent = (currentText: string) => {
+    // Extract JSON block if present
+    const jsonRegex = /```json\s*([\s\S]*?)\s*```/;
+    const match = currentText.match(jsonRegex);
+    
+    if (match && match[1]) {
+      try {
+        const parsedData = JSON.parse(match[1]);
+        setInteractiveData(parsedData);
+      } catch (e) {
+        // Still parsing JSON
+      }
+    }
+
+    let cleaned = currentText.replace(jsonRegex, '').trim();
+    const notesForCinematic = cleaned;
+    
+    // Extract flowcharts
+    const flowRegex = /### 🔄 FLOW: (.*?)\n([\s\S]*?)(?=\n### |$)/g;
+    const extractedFlows: Record<string, { title: string, steps: string[] }> = {};
+    let flowMatch;
+    let flowIndex = 0;
+    
+    let notesWithPlaceholders = cleaned;
+    
+    while ((flowMatch = flowRegex.exec(cleaned)) !== null) {
+      const title = flowMatch[1].trim();
+      const stepsText = flowMatch[2];
+      const steps = stepsText.match(/\d+\.\s*\*\*(.*?)\*\*(?::\s*(.*))?/g)?.map(step => {
+        return step.replace(/^\d+\.\s*/, '').trim();
+      }) || [];
+      
+      if (steps.length > 0) {
+        const placeholder = `[FLOWCHART_PLACEHOLDER_${flowIndex}]`;
+        extractedFlows[placeholder] = { title, steps };
+        notesWithPlaceholders = notesWithPlaceholders.replace(flowMatch[0], `\n\n${placeholder}\n\n`);
+        flowIndex++;
+      }
+    }
+    
+    // Extract visual cards
+    const visualRegex = /### 🎨 VISUAL: (.*?)\n([\s\S]*?)(?=\n### |$)/g;
+    const extractedVisuals: Record<string, { title: string, emoji: string, items: { icon: string, text: string }[] }> = {};
+    let visualMatch;
+    let visualIndex = 0;
+    
+    while ((visualMatch = visualRegex.exec(cleaned)) !== null) {
+      const title = visualMatch[1].trim();
+      const content = visualMatch[2];
+      
+      const emojiMatch = content.match(/- EMOJI:\s*(.*)/);
+      const emoji = emojiMatch ? emojiMatch[1].trim() : '✨';
+      
+      const items = content.match(/- ITEM:\s*(.*?)\s*\|\s*(.*)/g)?.map(item => {
+        const parts = item.match(/- ITEM:\s*(.*?)\s*\|\s*(.*)/);
+        return {
+          icon: parts ? parts[1].trim() : 'sparkles',
+          text: parts ? parts[2].trim() : ''
+        };
+      }) || [];
+      
+      if (items.length > 0) {
+        const placeholder = `[VISUAL_CARD_PLACEHOLDER_${visualIndex}]`;
+        extractedVisuals[placeholder] = { title, emoji, items };
+        notesWithPlaceholders = notesWithPlaceholders.replace(visualMatch[0], `\n\n${placeholder}\n\n`);
+        visualIndex++;
+      }
+    }
+    
+    setFlowcharts(extractedFlows);
+    setVisualCards(extractedVisuals);
+    setCleanNotes(notesForCinematic);
+    setNotes(notesWithPlaceholders);
   };
 
   const copyToClipboard = () => {
@@ -378,11 +473,13 @@ export default function NotesCreate() {
 
   const openCinematicView = () => {
     if (!notes || !file) return;
-    const html = generateCinematicHTML(generatedTitle, notes, selectedTheme);
+    const html = generateCinematicHTML(generatedTitle, cleanNotes || notes, selectedTheme, interactiveData);
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank');
   };
+
+  const deferredNotes = useDeferredValue(cleanNotes || notes);
 
   return (
     <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
@@ -510,6 +607,25 @@ export default function NotesCreate() {
                   </select>
                 </div>
 
+                <div className="space-y-3">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Output Language</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {languages.map((lang) => (
+                      <button
+                        key={lang}
+                        onClick={() => setSelectedLanguage(lang)}
+                        className={`py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border-2 ${
+                          selectedLanguage === lang
+                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-500/20'
+                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-indigo-300'
+                        }`}
+                      >
+                        {lang}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <button
                   onClick={handleGenerateNotes}
                   disabled={!file || isProcessing || isGenerating}
@@ -539,7 +655,7 @@ export default function NotesCreate() {
               transition={{ delay: 0.6 }}
               className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl shadow-indigo-500/10 border border-slate-100 dark:border-slate-800 flex flex-col h-[700px] overflow-hidden"
             >
-              <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50 dark:bg-slate-800/30">
+              <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50 dark:bg-slate-800/30 relative z-20">
                 <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white">
                     <FileText className="w-5 h-5" />
@@ -609,7 +725,7 @@ export default function NotesCreate() {
 
               <div 
                 ref={notesContainerRef}
-                className="flex-1 bg-white dark:bg-slate-900 p-8 sm:p-12 overflow-y-auto relative custom-scrollbar"
+                className="flex-1 min-w-0 bg-white dark:bg-slate-900 p-8 sm:p-12 overflow-y-auto relative custom-scrollbar"
               >
                 {isProcessing ? (
                   <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-8 max-w-md mx-auto text-center">
@@ -645,20 +761,70 @@ export default function NotesCreate() {
                     </div>
                   </div>
                 ) : (notes || isGenerating) ? (
-                  <div className="prose prose-slate dark:prose-invert max-w-none 
-                    prose-headings:text-slate-900 dark:prose-headings:text-white prose-headings:font-black prose-headings:tracking-tight
-                    prose-h1:text-5xl prose-h1:text-indigo-950 dark:prose-h1:text-indigo-400 prose-h1:border-b-4 prose-h1:border-indigo-100 dark:prose-h1:border-indigo-900/50 prose-h1:pb-8 prose-h1:mb-12
-                    prose-h2:text-3xl prose-h2:text-indigo-900 dark:prose-h2:text-indigo-300 prose-h2:mt-16 prose-h2:mb-8 prose-h2:border-l-8 prose-h2:border-indigo-200 dark:prose-h2:border-indigo-800 prose-h2:pl-6
-                    prose-h3:text-2xl prose-h3:text-indigo-800 dark:prose-h3:text-indigo-400 prose-h3:mt-10 prose-h3:mb-6
-                    prose-p:text-lg prose-p:leading-relaxed prose-p:text-slate-600 dark:prose-p:text-slate-200 prose-p:mb-8
-                    prose-blockquote:border-l-8 prose-blockquote:border-indigo-500 prose-blockquote:bg-indigo-50/50 dark:prose-blockquote:bg-indigo-900/20 prose-blockquote:py-8 prose-blockquote:px-10 prose-blockquote:rounded-r-[2rem] prose-blockquote:not-italic prose-blockquote:text-slate-800 dark:prose-blockquote:text-slate-200 prose-blockquote:shadow-inner prose-blockquote:my-12
-                    prose-li:text-lg prose-li:mb-4 dark:prose-li:text-slate-200 prose-li:marker:text-indigo-500
-                    prose-table:block prose-table:overflow-x-auto prose-table:whitespace-nowrap prose-table:border-collapse prose-table:w-full prose-table:my-12 prose-table:rounded-3xl prose-table:border prose-table:border-slate-200 dark:prose-table:border-slate-800
-                    prose-thead:bg-slate-50 dark:prose-thead:bg-slate-800 prose-thead:text-slate-900 dark:prose-thead:text-white prose-thead:border-b-2 prose-thead:border-slate-200 dark:prose-thead:border-slate-700
-                    prose-th:px-8 prose-th:py-5 prose-th:text-left prose-th:font-black prose-th:uppercase prose-th:tracking-widest prose-th:text-xs prose-th:min-w-[200px]
-                    prose-td:px-8 prose-td:py-5 prose-td:border-b prose-td:border-slate-100 dark:prose-td:border-slate-800 prose-td:text-slate-600 dark:prose-td:text-slate-200 prose-td:min-w-[200px]
+                  <div className="prose prose-slate dark:prose-invert max-w-none text-slate-800 dark:text-slate-200
+                    [&_h1]:text-5xl [&_h1]:font-serif [&_h1]:font-light [&_h1]:text-center [&_h1]:mb-16 [&_h1]:tracking-tight
+                    [&_h2]:text-3xl [&_h2]:font-serif [&_h2]:font-light [&_h2]:mt-20 [&_h2]:mb-10 [&_h2]:border-b [&_h2]:border-slate-200 dark:[&_h2]:border-slate-800 [&_h2]:pb-4
+                    [&_h3]:text-xl [&_h3]:font-medium [&_h3]:tracking-widest [&_h3]:uppercase [&_h3]:mt-12 [&_h3]:mb-6 [&_h3]:text-slate-500
+                    [&_p]:text-lg [&_p]:leading-relaxed [&_p]:font-light [&_p]:mb-8
+                    [&_blockquote]:border-l-2 [&_blockquote]:border-indigo-500 [&_blockquote]:pl-8 [&_blockquote]:py-2 [&_blockquote]:italic [&_blockquote]:font-serif [&_blockquote]:text-2xl [&_blockquote]:text-slate-600 dark:[&_blockquote]:text-slate-400 [&_blockquote]:my-12 [&_blockquote]:bg-transparent [&_blockquote]:rounded-none [&_blockquote]:shadow-none
+                    [&_li]:text-lg [&_li]:font-light [&_li]:mb-4 marker:[&_li]:text-indigo-400
+                    [&_strong]:font-semibold
+                    [&_table]:block [&_table]:overflow-x-auto [&_table]:whitespace-nowrap [&_table]:border-collapse [&_table]:w-full [&_table]:my-12 [&_table]:border-y [&_table]:border-slate-200 dark:[&_table]:border-slate-800 [&_table]:rounded-none
+                    [&_thead]:bg-transparent [&_thead]:text-slate-500 dark:[&_thead]:text-slate-400 [&_thead]:border-b [&_thead]:border-slate-200 dark:[&_thead]:border-slate-800
+                    [&_th]:px-4 [&_th]:py-4 [&_th]:text-left [&_th]:font-medium [&_th]:uppercase [&_th]:tracking-widest [&_th]:text-xs [&_th]:min-w-[150px]
+                    [&_td]:px-4 [&_td]:py-4 [&_td]:border-b [&_td]:border-slate-100 dark:[&_td]:border-slate-800/50 [&_td]:text-slate-600 dark:[&_td]:text-slate-300 [&_td]:min-w-[150px] [&_td]:font-light
                     [&>*:first-child]:mt-0">
-                    <Markdown remarkPlugins={[remarkGfm]}>{notes}</Markdown>
+                    <Markdown 
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        table: ({node, ...props}) => (
+                          <div className="overflow-x-auto my-12 w-full custom-scrollbar">
+                            <table className="w-full border-collapse text-sm" {...props} />
+                          </div>
+                        ),
+                        th: ({node, ...props}) => <th className="px-4 py-4 text-left font-medium uppercase tracking-widest text-xs border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 min-w-[150px]" {...props} />,
+                        td: ({node, ...props}) => <td className="px-4 py-4 border-b border-slate-100 dark:border-slate-800/50 text-slate-600 dark:text-slate-300 font-light min-w-[150px]" {...props} />,
+                        p: ({node, children, ...props}) => {
+                          const findPlaceholder = (child: any): string | null => {
+                            if (typeof child === 'string') {
+                              const text = child.trim();
+                              if (text.startsWith('[FLOWCHART_PLACEHOLDER_') || text.startsWith('[VISUAL_CARD_PLACEHOLDER_')) {
+                                return text;
+                              }
+                            }
+                            if (Array.isArray(child)) {
+                              for (const c of child) {
+                                const found = findPlaceholder(c);
+                                if (found) return found;
+                              }
+                            }
+                            return null;
+                          };
+
+                          const placeholder = findPlaceholder(children);
+                          if (placeholder) {
+                            if (placeholder.startsWith('[FLOWCHART_PLACEHOLDER_')) {
+                              if (flowcharts[placeholder]) {
+                                return <Flowchart title={flowcharts[placeholder].title} steps={flowcharts[placeholder].steps} />;
+                              }
+                            }
+                            if (placeholder.startsWith('[VISUAL_CARD_PLACEHOLDER_')) {
+                              if (visualCards[placeholder]) {
+                                return <VisualCard title={visualCards[placeholder].title} emoji={visualCards[placeholder].emoji} items={visualCards[placeholder].items} />;
+                              }
+                            }
+                          }
+                          return <p {...props}>{children}</p>;
+                        }
+                      }}
+                    >
+                      {deferredNotes}
+                    </Markdown>
+                    
+                    {interactiveData && !isGenerating && (
+                      <InteractiveNotes data={interactiveData} />
+                    )}
+
                     {isGenerating && (
                       <div className="flex items-center gap-3 mt-12">
                         <div className="flex gap-1">
@@ -679,7 +845,7 @@ export default function NotesCreate() {
                           ></motion.span>
                         </div>
                         {notes.trim().length === 0 && (
-                          <span className="text-indigo-600 font-black animate-pulse text-xl italic tracking-tight">Synthesizing Notes...</span>
+                          <span className="text-indigo-600 dark:text-indigo-400 font-black animate-pulse text-xl italic tracking-tight">Synthesizing Notes...</span>
                         )}
                       </div>
                     )}

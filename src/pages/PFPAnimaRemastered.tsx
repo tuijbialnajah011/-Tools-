@@ -58,11 +58,13 @@ export function PFPAnimaRemastered() {
     setAllImages([]);
     setSelectedIds(new Set());
     setCurrentPage(1);
-    setStatusMessage("Connecting to DuckDuckGo...");
+    setStatusMessage("Searching...");
 
     try {
       setSearchProgress(20);
-      const response = await fetch(`/api/search-duckduckgo?q=${encodeURIComponent(keyword + " anime pfp aesthetic")}`);
+      const encodedQuery = encodeURIComponent(keyword + " anime pfp aesthetic");
+      
+      const response = await fetch(`/api/search-duckduckgo?q=${encodedQuery}`);
       
       if (!response.ok) {
         throw new Error(`Search failed: ${response.statusText}`);
@@ -77,19 +79,25 @@ export function PFPAnimaRemastered() {
 
       setSearchProgress(90);
       
-      // Deduplicate results by URL hash and filename
+      // Deduplicate results by URL hash and thumbnail ID
       const seenHashes = new Set<string>();
-      const seenFilenames = new Set<string>();
-      const uniqueResults = (data.results || []).filter((img: any) => {
+      const seenThumbIds = new Set<string>();
+      const uniqueResults = data.results.filter((img: any) => {
         const hash = img.url.split('?')[0].toLowerCase();
-        const filename = hash.split('/').pop() || '';
         
-        if (seenHashes.has(hash) || (filename && seenFilenames.has(filename))) {
+        let thumbId = img.thumbnail;
+        try {
+          const urlObj = new URL(img.thumbnail);
+          const idParam = urlObj.searchParams.get('id');
+          if (idParam) thumbId = idParam;
+        } catch (e) {}
+        
+        if (seenHashes.has(hash) || seenThumbIds.has(thumbId)) {
           return false;
         }
         
         seenHashes.add(hash);
-        if (filename) seenFilenames.add(filename);
+        seenThumbIds.add(thumbId);
         return true;
       });
 
@@ -153,7 +161,7 @@ export function PFPAnimaRemastered() {
         let completedCount = 0;
         
         // Concurrent queue system
-        const concurrency = 10;
+        const concurrency = 20;
         let currentIndex = 0;
         
         const processNext = async (): Promise<void> => {
@@ -205,10 +213,10 @@ export function PFPAnimaRemastered() {
         a.click();
         URL.revokeObjectURL(url);
       } else {
-        // Individual downloads - Concurrent queue system
+        // Individual downloads - Fetch blob and verify it's an image before downloading
         let successCount = 0;
         let completedCount = 0;
-        const concurrency = 10;
+        const concurrency = 5; // Lower concurrency to prevent browser/network overload
         let currentIndex = 0;
         
         const processNext = async (): Promise<void> => {
@@ -218,41 +226,62 @@ export function PFPAnimaRemastered() {
           const img = selectedImages[index];
           
           try {
+            // Try direct fetch first
             let response = await fetch(img.url).catch(() => null);
-            if (!response || !response.ok) {
+            
+            // If direct fails or returns non-image, try proxy
+            if (!response || !response.ok || !response.headers.get('content-type')?.includes('image')) {
               response = await fetch(`/api/image-proxy?url=${encodeURIComponent(img.url)}`);
             }
             
             if (response && response.ok) {
-              const blob = await response.blob();
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              const ext = img.url.split('.').pop()?.split(/[#?]/)[0] || 'jpg';
-              const safeKeyword = keyword.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-              const safeId = img.id.replace(/[^a-z0-9]/gi, '_');
-              const timestamp = Date.now();
-              a.download = `anima_${safeKeyword}_${safeId}_${timestamp}.${ext}`;
-              a.click();
-              
-              // Cleanup after a short delay to ensure download starts
-              setTimeout(() => URL.revokeObjectURL(url), 1000);
-              successCount++;
+              const contentType = response.headers.get('content-type') || '';
+              // Only download if it's actually an image, not an HTML error page
+              if (contentType.includes('image')) {
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                
+                // Determine extension from content-type if possible, otherwise fallback to url
+                let ext = 'jpg';
+                if (contentType.includes('png')) ext = 'png';
+                else if (contentType.includes('gif')) ext = 'gif';
+                else if (contentType.includes('webp')) ext = 'webp';
+                else {
+                  const urlExt = img.url.split('.').pop()?.split(/[#?]/)[0];
+                  if (urlExt && urlExt.length <= 4) ext = urlExt;
+                }
+                
+                const safeKeyword = keyword.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                const safeId = img.id.replace(/[^a-z0-9]/gi, '_');
+                const timestamp = Date.now();
+                a.download = `anima_${safeKeyword}_${safeId}_${timestamp}.${ext}`;
+                a.click();
+                
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                successCount++;
+              } else {
+                console.warn(`Skipped non-image response for ${img.url}: ${contentType}`);
+              }
             }
           } catch (err) {
             console.error(`Failed to download ${img.url}`, err);
           } finally {
             completedCount++;
             setDownloadProgress(Math.round((completedCount / selectedImages.length) * 100));
-            // Small delay to prevent browser from blocking too many simultaneous downloads
-            await new Promise(r => setTimeout(r, 100));
+            // Small delay between downloads to let the browser breathe
+            await new Promise(r => setTimeout(r, 200));
             await processNext();
           }
         };
 
-        // Start initial batch of workers
         const workers = Array(Math.min(concurrency, selectedImages.length)).fill(null).map(() => processNext());
         await Promise.all(workers);
+
+        if (successCount === 0) {
+          throw new Error("Failed to download any valid images. They might be protected or unavailable.");
+        }
       }
 
       setStatusMessage("Download complete!");

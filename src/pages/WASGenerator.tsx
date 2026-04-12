@@ -25,6 +25,13 @@ export function WASGenerator() {
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
   
+  const AUTHORS = [
+    "ͲႮᏆᎫᏴᏆᎪᏞΝᎪᎫᎪᎻ·Kҽɳƈԋσ Aʅʅιαɳƈҽ",
+    "if you steal my sticker then you're gay/lesbian. Don't you dare baka 😭 ( Tuijbialnajah-frieren-paglu-flat-boobs-lover )",
+    "Tuijbialnajah-frieren-paglu-flat-boobs-lover",
+    "Powered by Kҽɳƈԋσ Aʅʅιαɳƈҽ"
+  ];
+  const [selectedAuthor, setSelectedAuthor] = useState(AUTHORS[0]);
   const [packName, setPackName] = useState("My Sticker Pack");
   const [maxPacks, setMaxPacks] = useState(1);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -469,7 +476,7 @@ export function WASGenerator() {
           : (packName.trim() || "My Sticker Pack");
           
         zip.file("title.txt", currentPackName);
-        zip.file("author.txt", "ͲႮᏆᎫᏴᏆᎪᏞΝΑᎫΑΉ·Kҽɳƈԋσ Aʅʅιαɳƈҽ");
+        zip.file("author.txt", selectedAuthor);
         
         const trayCanvas = document.createElement('canvas');
         trayCanvas.width = 96;
@@ -740,6 +747,22 @@ export function WASGenerator() {
                     disabled={processedImages.length < 30}
                     className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    Author
+                  </label>
+                  <select
+                    value={selectedAuthor}
+                    onChange={(e) => setSelectedAuthor(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all dark:text-white"
+                  >
+                    {AUTHORS.map((author, idx) => (
+                      <option key={idx} value={author}>
+                        {author.length > 40 ? author.substring(0, 40) + '...' : author}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 

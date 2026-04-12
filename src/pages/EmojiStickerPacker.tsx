@@ -30,7 +30,13 @@ export default function EmojiStickerPacker() {
     setPetals(newPetals);
   }, []);
   
-  const AUTHOR_NAME = 'ͲႮᏆᎫᏴᏆᎪᏞΝᎪᎫᎪᎻ·Kҽɳƈԋσ Aʅʅιαɳƈҽ';
+  const AUTHORS = [
+    "ͲႮᏆᎫᏴᏆᎪᏞΝᎪᎫᎪᎻ·Kҽɳƈԋσ Aʅʅιαɳƈҽ",
+    "if you steal my sticker then you're gay/lesbian. Don't you dare baka 😭 ( Tuijbialnajah-frieren-paglu-flat-boobs-lover )",
+    "Tuijbialnajah-frieren-paglu-flat-boobs-lover",
+    "Powered by Kҽɳƈԋσ Aʅʅιαɳƈҽ"
+  ];
+  const [selectedAuthor, setSelectedAuthor] = useState(AUTHORS[0]);
   const MAX_EMOJIS = 30;
 
   const COMMON_EMOJIS = [
@@ -217,7 +223,7 @@ export default function EmojiStickerPacker() {
           {
             "identifier": `pack_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
             "name": packName.substring(0, 128),
-            "publisher": AUTHOR_NAME.substring(0, 128),
+            "publisher": selectedAuthor.substring(0, 128),
             "tray_image_file": "tray.png",
             "publisher_email": "contact@example.com",
             "publisher_website": "https://example.com",
@@ -241,7 +247,7 @@ export default function EmojiStickerPacker() {
       
       // Add legacy metadata files for universal compatibility with older apps
       zip.file('title.txt', packName.substring(0, 128));
-      zip.file('author.txt', AUTHOR_NAME.substring(0, 128));
+      zip.file('author.txt', selectedAuthor.substring(0, 128));
       
       webpBlobs.forEach((blob, i) => {
         // Ensure filenames are simple and consistent
@@ -427,11 +433,17 @@ export default function EmojiStickerPacker() {
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                     Author
                   </label>
-                  <div className="w-full px-4 py-3 bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-500 dark:text-slate-400 font-medium cursor-not-allowed flex items-center justify-between">
-                    <span className="truncate">{AUTHOR_NAME}</span>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                  </div>
-                  <p className="text-xs text-slate-400 mt-1">Author name is permanently set.</p>
+                  <select
+                    value={selectedAuthor}
+                    onChange={(e) => setSelectedAuthor(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-slate-900 dark:text-white font-medium"
+                  >
+                    {AUTHORS.map((author, idx) => (
+                      <option key={idx} value={author}>
+                        {author.length > 40 ? author.substring(0, 40) + '...' : author}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>

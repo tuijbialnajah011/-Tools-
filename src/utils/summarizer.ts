@@ -5,7 +5,8 @@ export async function generateNotes(
   text: string, 
   length: 'short' | 'medium' | 'long',
   onProgress?: (text: string) => void,
-  mode: 'paste' | 'prompt' = 'paste'
+  mode: 'paste' | 'prompt' = 'paste',
+  language: string = 'English'
 ): Promise<string> {
   if (!text || text.trim().length === 0) return "";
 
@@ -19,7 +20,7 @@ export async function generateNotes(
     if (length === 'long') lengthInstruction = "CRITICAL: The summary should be comprehensive, aiming for only a 30% reduction of the source text (roughly 70% of the original length). Capture all nuances, important data points, and detailed explanations.";
 
     let contextInstruction = `I will provide you with raw text extracted from a document.
-Your task is to generate highly organized, beautifully designed, and structured notes using Markdown.`;
+Your task is to generate highly organized, beautifully designed, and structured notes using Markdown in ${language}.`;
     
     let inputData = `Text to analyze:
 """
@@ -28,7 +29,7 @@ ${text.substring(0, 30000)}
 
     if (mode === 'prompt') {
       contextInstruction = `The user has provided a topic or a prompt. 
-Your task is to FIRST generate comprehensive, high-quality information about this topic, and THEN structure it into beautifully designed notes using Markdown.`;
+Your task is to FIRST generate comprehensive, high-quality information about this topic, and THEN structure it into beautifully designed notes using Markdown in ${language}.`;
       inputData = `Topic/Prompt: "${text}"`;
       lengthInstruction = `CRITICAL: The generated content should be ${length} in length. 
 - If short: Provide a high-level overview with 3-4 key sections.
@@ -66,8 +67,53 @@ Guidelines for Premium Document Design:
    - Use horizontal rules (---) between major sections.
    - Use bullet points (-) for lists.
 6. **Highlights**: Use blockquotes (>) for critical takeaways or "Pro-Tips".
-7. ${lengthInstruction}
-8. Fix obvious OCR typos.
+7. **FLOWCHARTS**: Whenever explaining a process, timeline, sequence, or step-by-step concept, you MUST insert a Flowchart. Use this EXACT format:
+   \`\`\`markdown
+   ### 🔄 FLOW: [Name of Process]
+   1. **[Step 1 Name]**: [Short description]
+   2. **[Step 2 Name]**: [Short description]
+   3. **[Step 3 Name]**: [Short description]
+   \`\`\`
+   Place these flowcharts between regular cards to break up the text visually.
+8. **VISUAL CARDS**: For key concepts, definitions, or "Did you know" facts, use a Visual Card. Use this EXACT format:
+    \`\`\`markdown
+    ### 🎨 VISUAL: [Topic Name]
+    - EMOJI: [One relevant emoji]
+    - ITEM: [Icon: sparkles|info|check|zap|star|target] | [Short descriptive text]
+    - ITEM: [Icon: sparkles|info|check|zap|star|target] | [Short descriptive text]
+    \`\`\`
+    Include 2-4 items per visual card.
+ 9. ${lengthInstruction}
+10. Fix obvious OCR typos.
+11. **NO LATEX OR MATH SYMBOLS**: Do NOT use LaTeX formatting like $a+b$ or \\n. Use plain text for math equations or symbols. Avoid unnecessary special characters.
+12. **NO WEIRD SYMBOLS**: Do NOT use unnecessary symbols like $¥®^¥ or any other decorative characters that are not standard Markdown.
+13. **INTERACTIVE QUIZ (HARDCODED DATA)**: At the very end of your response, you MUST include a JSON block enclosed in \`\`\`json ... \`\`\` containing exactly 20 MCQs (10 easy, 5 medium, 5 hard) and 5 "Match the Following" pairs based on the notes.
+    **CRITICAL**: The interaction logic is already hardcoded in the app. You ONLY need to provide the DATA in this JSON format.
+Use this EXACT JSON structure:
+\`\`\`json
+{
+  "mcqs": [
+    { "question": "...", "options": ["...", "...", "...", "..."], "answerIndex": 0, "difficulty": "easy", "explanation": "..." }
+  ],
+  "matching": [
+    { "left": "...", "right": "..." }
+  ],
+  "flashcards": [
+    { "term": "...", "definition": "..." }
+  ],
+  "mindMap": {
+    "nodes": [
+      { "id": "1", "label": "Main Topic", "type": "root" },
+      { "id": "2", "label": "Subtopic 1", "type": "sub" }
+    ],
+    "edges": [
+      { "from": "1", "to": "2" }
+    ]
+  }
+}
+\`\`\`
+Ensure valid JSON. Do not include any text after the JSON block. Keep questions and options concise to avoid token limits.
+For flashcards, include 5-10 key terms. For the mind map, create a hierarchical structure (root -> sub -> sub-sub) with 8-12 nodes.
 
 ${inputData}
     `;
