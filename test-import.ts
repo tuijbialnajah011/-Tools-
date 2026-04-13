@@ -1,2 +1,2 @@
-import app from "./api/[...slug].ts";
+import app from "./api/index.ts";
 console.log("App imported successfully");

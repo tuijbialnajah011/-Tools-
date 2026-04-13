@@ -364,6 +364,44 @@ app.get("/api/search-duckduckgo", async (req, res) => {
     } catch (finalError) {
       console.error("Safebooru final fallback failed:", finalError);
     }
+
+    // Ultimate fallback to Reddit if Safebooru also fails or returns empty
+    try {
+      const redditUrl = `https://www.reddit.com/search.json?q=${encodeURIComponent(keyword)}&type=link&limit=100`;
+      const redditRes = await fetch(redditUrl, {
+        headers: { 
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+      });
+      
+      if (redditRes.ok) {
+        const redditData = await redditRes.json();
+        const posts = redditData?.data?.children || [];
+        
+        const results = posts
+          .filter((post: any) => {
+            const url = post.data.url;
+            return url && (url.endsWith('.jpg') || url.endsWith('.png') || url.endsWith('.jpeg') || url.endsWith('.gif'));
+          })
+          .map((post: any) => ({
+            id: `reddit-fallback-${post.data.id}`,
+            url: post.data.url,
+            thumbnail: post.data.thumbnail && post.data.thumbnail.startsWith('http') ? post.data.thumbnail : post.data.url,
+            source: `r/${post.data.subreddit} (Fallback)`,
+            sourceUrl: `https://reddit.com${post.data.permalink}`,
+            title: post.data.title,
+            width: 800,
+            height: 800,
+            type: 'Anime'
+          }));
+          
+        if (results.length > 0) {
+          return res.json({ results });
+        }
+      }
+    } catch (redditError) {
+      console.error("Reddit ultimate fallback failed:", redditError);
+    }
     
     return res.status(500).json({ error: "Search failed across all providers." });
   }
