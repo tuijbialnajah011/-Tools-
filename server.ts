@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
-import app from "./api/index.ts";
+import app from "./api/[...slug].ts";
 
 async function startServer() {
   const PORT = 3000;

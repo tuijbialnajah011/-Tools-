@@ -120,7 +120,7 @@ export function ImageToText() {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: `You are an expert at fixing OCR errors and formatting text. 
         Below is raw text extracted from an image. 
         Please fix any spelling errors, correct character swaps (like 'Purcnasea' to 'Purchased', 'gooas' to 'goods', '¥' to '₹' if it looks like currency), 

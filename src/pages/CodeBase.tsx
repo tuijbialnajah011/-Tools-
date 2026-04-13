@@ -94,7 +94,7 @@ export function CodeBase() {
       ${code}`;
 
       const chat = ai.chats.create({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         config: {
           systemInstruction,
         }
@@ -105,9 +105,9 @@ export function CodeBase() {
       try {
         response = await chat.sendMessage({ message: userMessage });
       } catch (err: any) {
-        console.warn("Gemini 3 Flash failed, trying fallback...", err);
+        console.warn("Primary model failed, trying fallback...", err);
         const fallbackChat = ai.chats.create({
-          model: "gemini-3.1-flash-lite-preview",
+          model: "gemini-1.5-flash",
           config: { systemInstruction }
         });
         response = await fallbackChat.sendMessage({ message: userMessage });

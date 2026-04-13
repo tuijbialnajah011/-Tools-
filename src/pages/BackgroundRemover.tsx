@@ -121,9 +121,8 @@ export function BackgroundRemover() {
 
       // Try free image models in sequence
       const modelsToTry = [
-        'gemini-2.5-flash-image',
-        'gemini-3.1-flash-image-preview',
-        'gemini-3-pro-image'
+        'gemini-2.5-pro',
+        'gemini-1.5-pro'
       ];
 
       for (const currentModel of modelsToTry) {

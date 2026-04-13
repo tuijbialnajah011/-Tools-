@@ -221,8 +221,8 @@ app.get("/api/search-duckduckgo", async (req, res) => {
     let nextUrl = `https://duckduckgo.com/i.js?q=${encodeURIComponent(keyword)}&o=json&p=1&s=0&u=1&f=,,,&vqd=${vqd}`;
     let debugLogs: string[] = [];
     
-    // Fetch up to 6 pages (around 300 images)
-    for (let i = 0; i < 6; i++) {
+    // Fetch up to 3 pages (around 150 images) to prevent Vercel timeout
+    for (let i = 0; i < 3; i++) {
       if (!nextUrl) {
         debugLogs.push(`Page ${i}: nextUrl is empty`);
         break;
@@ -285,35 +285,37 @@ app.get("/api/search-duckduckgo", async (req, res) => {
     try {
       let allQwantResults: any[] = [];
       
-      // Fetch 4 pages of Qwant (200 results)
-      for (let page = 1; page <= 4; page++) {
+      // Fetch 4 pages of Qwant concurrently to save time
+      const qwantPromises = Array.from({ length: 4 }, (_, i) => {
+        const page = i + 1;
         const offset = (page - 1) * 50;
         const qwantUrl = `https://api.qwant.com/v3/search/images?count=50&q=${encodeURIComponent(keyword)}&t=images&safesearch=1&locale=en_US&offset=${offset}&device=desktop`;
         
-        const qwantRes = await fetch(qwantUrl, {
+        return fetch(qwantUrl, {
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           }
-        });
+        }).then(res => res.ok ? res.json() : null).catch(() => null);
+      });
 
-        if (qwantRes.ok) {
-          const qwantData = await qwantRes.json();
-          if (qwantData?.data?.result?.items) {
-            const pageResults = qwantData.data.result.items.map((r: any, idx: number) => ({
-              id: `qwant-fallback-${page}-${idx}`,
-              url: r.media,
-              thumbnail: r.thumbnail,
-              source: "Qwant (Fallback)",
-              sourceUrl: r.url,
-              title: r.title || keyword,
-              width: r.width,
-              height: r.height,
-              type: 'Anime'
-            }));
-            allQwantResults = [...allQwantResults, ...pageResults];
-          }
+      const qwantResults = await Promise.all(qwantPromises);
+      
+      qwantResults.forEach((qwantData, i) => {
+        if (qwantData?.data?.result?.items) {
+          const pageResults = qwantData.data.result.items.map((r: any, idx: number) => ({
+            id: `qwant-fallback-${i}-${idx}`,
+            url: r.media,
+            thumbnail: r.thumbnail,
+            source: "Qwant (Fallback)",
+            sourceUrl: r.url,
+            title: r.title || keyword,
+            width: r.width,
+            height: r.height,
+            type: 'Anime'
+          }));
+          allQwantResults = [...allQwantResults, ...pageResults];
         }
-      }
+      });
       
       if (allQwantResults.length > 0) {
         return res.json({ results: allQwantResults });
@@ -322,7 +324,48 @@ app.get("/api/search-duckduckgo", async (req, res) => {
       console.error("Qwant fallback also failed:", fallbackError);
     }
     
-    return res.status(500).json({ error: "Search failed." });
+    // Final fallback to Safebooru for anime images
+    try {
+      let keywordForBooru = keyword.replace(/anime pfp aesthetic/i, "").trim();
+      if (!keywordForBooru) keywordForBooru = "avatar";
+      
+      const searchUrl = `https://safebooru.org/index.php?page=dapi&s=post&q=index&tags=${encodeURIComponent(keywordForBooru)}&json=1&limit=100`;
+      
+      const searchRes = await fetch(searchUrl, {
+        headers: { 
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+      });
+      
+      if (searchRes.ok) {
+        const textData = await searchRes.text();
+        let data = [];
+        if (textData.trim()) {
+          try {
+            data = JSON.parse(textData);
+          } catch (e) {}
+        }
+        
+        if (data && data.length > 0) {
+          const results = data.map((r: any) => ({
+            id: `safebooru-fallback-${r.id}`,
+            url: r.file_url,
+            thumbnail: r.preview_url || r.sample_url || r.file_url,
+            source: "safebooru.org (Fallback)",
+            sourceUrl: `https://safebooru.org/index.php?page=post&s=view&id=${r.id}`,
+            title: r.tags,
+            width: r.width,
+            height: r.height,
+            type: 'Anime'
+          }));
+          return res.json({ results });
+        }
+      }
+    } catch (finalError) {
+      console.error("Safebooru final fallback failed:", finalError);
+    }
+    
+    return res.status(500).json({ error: "Search failed across all providers." });
   }
 });
 
@@ -540,6 +583,16 @@ app.get("/api/image-proxy", async (req, res) => {
     console.warn(`Image proxy critical error for ${req.query.url}:`, error.message);
     res.status(500).send("Failed to load image");
   }
+});
+
+// Catch-all for API routes to debug Vercel routing
+app.all("/api/*", (req, res) => {
+  res.status(404).json({ error: `API route not found: ${req.method} ${req.url}` });
+});
+
+// Also handle the case where Vercel rewrites to /api/index
+app.all("/api/index", (req, res) => {
+  res.status(404).json({ error: `API route not found (rewritten to /api/index). Original URL: ${req.originalUrl}` });
 });
 
 export default app;

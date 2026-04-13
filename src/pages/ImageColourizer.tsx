@@ -122,9 +122,8 @@ export default function ImageColourizer() {
       const mimeType = originalImage.split(';')[0].split(':')[1];
 
       const modelsToTry = [
-        'gemini-2.5-flash-image',
-        'gemini-3.1-flash-image-preview',
-        'gemini-3-pro-image-preview'
+        'gemini-2.5-pro',
+        'gemini-1.5-pro'
       ];
 
       let foundImage = false;
