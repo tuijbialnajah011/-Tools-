@@ -624,7 +624,7 @@ app.get("/api/image-proxy", async (req, res) => {
 });
 
 // Catch-all for API routes to debug Vercel routing
-app.all("/api/*", (req, res) => {
+app.all("/api/*all", (req, res) => {
   res.status(404).json({ error: `API route not found: ${req.method} ${req.url}` });
 });
 
