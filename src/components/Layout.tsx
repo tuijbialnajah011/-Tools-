@@ -8,6 +8,7 @@ import { LayoutDashboard, Wrench, Menu, X, Sun, Moon, Image, Maximize, Palette, 
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { usageService } from "../services/usageService";
+import { HeaderAuth } from "./HeaderAuth";
 
 function cn(...inputs: (string | undefined | null | false)[]) {
   return twMerge(clsx(inputs));
@@ -95,6 +96,7 @@ export function Layout() {
           <span className="text-lg font-semibold text-slate-900 dark:text-white">𝙱𝙹𝙴 ~ Tools</span>
         </div>
         <div className="flex items-center space-x-2">
+          <HeaderAuth />
           <button
             onClick={toggleTheme}
             className="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
@@ -240,13 +242,16 @@ export function Layout() {
             <Wrench className="w-6 h-6 text-indigo-600 mr-2" />
             <span className="text-lg font-semibold text-slate-900 dark:text-white">𝙱𝙹𝙴 ~ Tools</span>
           </div>
-          <button
-            onClick={toggleTheme}
-            className="p-1.5 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
-            title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-          >
-            {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-          </button>
+          <div className="flex items-center gap-2">
+            <HeaderAuth />
+            <button
+              onClick={toggleTheme}
+              className="p-1.5 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
+              title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            >
+              {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
+          </div>
         </div>
 
         <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
