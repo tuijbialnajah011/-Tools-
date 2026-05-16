@@ -1,98 +1,118 @@
-import React, { useState, useEffect } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { LogIn, LogOut, User as UserIcon, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { supabase } from '../lib/supabase';
+import { LogIn, LogOut, User as UserIcon, X, Mail, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// Instead of hardcoding from a missing json file, try to initialize Firebase if possible config exists
-let auth: any = null;
-try {
-  // Check if we have env vars, mostly for development
-  if (import.meta.env.VITE_FIREBASE_PROJECT_ID) {
-    const firebaseConfig = {
-      apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-      authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-      projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-      storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-      messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-      appId: import.meta.env.VITE_FIREBASE_APP_ID,
-    };
-    const app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-  }
-} catch (error) {
-  console.warn("Firebase config error:", error);
-}
-
 export function HeaderAuth() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  
+  const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!auth) {
-      setLoading(false);
-      return;
-    }
-    
-    // Subscribe to auth state changes
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
+    // Check active session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user || null);
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null);
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const handleLogin = async () => {
-    if (!auth) {
-      setError("Firebase is not configured. Please run set_up_firebase tool first.");
-      return;
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
+        setIsModalOpen(false);
+      }
+    };
+
+    if (isModalOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
     }
     
-    setError(null);
-    setLoading(true);
-    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isModalOpen]);
+
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    setSuccessMessage(null);
+    setAuthLoading(true);
+
+    if (isSignUp && password !== confirmPassword) {
+      setAuthError("Passwords do not match");
+      setAuthLoading(false);
+      return;
+    }
+
     try {
-      const provider = new GoogleAuthProvider();
-      // Use popup for AI Studio environment
-      provider.setCustomParameters({
-        prompt: 'select_account'
-      });
-      await signInWithPopup(auth, provider);
-    } catch (err: any) {
-      console.error("Login failed:", err);
-      // Don't show confusing popup closed errors, only real errors
-      if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
-        setError(err.message || "Failed to sign in");
+      if (isSignUp) {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+        
+        if (error) throw error;
+        
+        if (data.user && data.user.identities && data.user.identities.length === 0) {
+          setAuthError("An account with this email already exists. Please sign in.");
+          setIsSignUp(false);
+        } else {
+          setSuccessMessage("Account created successfully! You can now log in.");
+          setIsSignUp(false); // Switch to login view
+          setPassword('');
+          setConfirmPassword('');
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        
+        if (error) throw error;
+        setIsModalOpen(false);
       }
+    } catch (err: any) {
+      console.error("Auth error:", err);
+      setAuthError(err.message || "Authentication failed");
     } finally {
-      setLoading(false);
+      setAuthLoading(false);
     }
   };
 
   const handleLogout = async () => {
-    if (!auth) return;
-    
     try {
-      await signOut(auth);
+      await supabase.auth.signOut();
     } catch (err) {
       console.error("Logout failed:", err);
     }
   };
 
-  if (!auth) {
-    return (
-      <button 
-        className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-full cursor-not-allowed"
-        title="Firebase setup required"
-        disabled
-      >
-        <AlertCircle className="w-3.5 h-3.5" />
-        <span>Setup Required</span>
-      </button>
-    );
-  }
+  const toggleModal = () => {
+    setIsModalOpen(!isModalOpen);
+    setAuthError(null);
+    setSuccessMessage(null);
+    setEmail('');
+    setPassword('');
+    setConfirmPassword('');
+    setIsSignUp(false);
+  };
 
   return (
     <div className="relative z-50">
@@ -101,25 +121,19 @@ export function HeaderAuth() {
       ) : user ? (
         <div className="group relative">
           <button className="flex items-center gap-2 p-1 pl-3 pr-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full shadow-sm hover:shadow-md transition-all">
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-200 max-w-[100px] truncate">
-              {user.displayName || user.email?.split('@')[0]}
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-200 max-w-[150px] truncate">
+              {user.email}
             </span>
-            {user.photoURL ? (
-              <img 
-                src={user.photoURL} 
-                alt="Profile" 
-                className="w-7 h-7 rounded-full object-cover"
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <div className="w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                <UserIcon className="w-3.5 h-3.5" />
-              </div>
-            )}
+            <div className="w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+              <UserIcon className="w-3.5 h-3.5" />
+            </div>
           </button>
           
           <div className="absolute right-0 top-full mt-2 w-48 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all isolate">
             <div className="p-2 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700">
+              <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-700 mb-1 truncate">
+                {user.email}
+              </div>
               <button 
                 onClick={handleLogout}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
@@ -132,30 +146,141 @@ export function HeaderAuth() {
         </div>
       ) : (
         <button 
-          onClick={handleLogin}
+          onClick={toggleModal}
           className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-full shadow-sm shadow-indigo-600/20 transition-all hover:-translate-y-0.5 active:translate-y-0"
         >
           <LogIn className="w-4 h-4" />
-          <span>Sign In</span>
+          <span>Sign In / Up</span>
         </button>
       )}
-      
+
+      {/* Auth Modal overlay */}
       <AnimatePresence>
-        {error && (
-          <motion.div 
-            initial={{ opacity: 0, y: 10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            className="absolute top-12 right-0 w-64 p-3 bg-red-50 border border-red-200 text-red-600 text-xs rounded-xl shadow-lg z-50 text-center"
-          >
-            {error}
-            <button 
-              onClick={() => setError(null)}
-              className="absolute top-1 right-1 p-1 hover:bg-red-100 rounded-md"
-            >
-              x
-            </button>
-          </motion.div>
+        {isModalOpen && !user && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[90]"
+            />
+            <div className="fixed inset-0 flex items-center justify-center z-[100] px-4 pointer-events-none">
+              <motion.div
+                ref={modalRef}
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden pointer-events-auto"
+              >
+                <div className="flex justify-between items-center p-6 pb-4 border-b border-slate-100 dark:border-slate-800">
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+                    {isSignUp ? 'Create an Account' : 'Welcome Back'}
+                  </h3>
+                  <button 
+                    onClick={toggleModal}
+                    className="p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-6">
+                  {authError && (
+                    <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800/50 text-red-600 dark:text-red-400 text-sm rounded-xl">
+                      {authError}
+                    </div>
+                  )}
+
+                  {successMessage && (
+                    <div className="mb-4 p-3 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800/50 text-emerald-600 dark:text-emerald-400 text-sm rounded-xl">
+                      {successMessage}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleAuth} className="space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Email (Gmail preferred)</label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input
+                          type="email"
+                          required
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-600 focus:border-transparent outline-none transition-all dark:text-white"
+                          placeholder="your.email@gmail.com"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input
+                          type="password"
+                          required
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-600 focus:border-transparent outline-none transition-all dark:text-white"
+                          placeholder="••••••••"
+                          minLength={6}
+                        />
+                      </div>
+                    </div>
+
+                    {isSignUp && (
+                      <motion.div 
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        className="space-y-1"
+                      >
+                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Confirm Password</label>
+                        <div className="relative">
+                          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                          <input
+                            type="password"
+                            required={isSignUp}
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-600 focus:border-transparent outline-none transition-all dark:text-white"
+                            placeholder="••••••••"
+                            minLength={6}
+                          />
+                        </div>
+                      </motion.div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={authLoading}
+                      className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl shadow-sm transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center"
+                    >
+                      {authLoading ? (
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        isSignUp ? 'Create Account' : 'Sign In'
+                      )}
+                    </button>
+                  </form>
+
+                  <div className="mt-6 text-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsSignUp(!isSignUp);
+                        setAuthError(null);
+                        setSuccessMessage(null);
+                      }}
+                      className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
+                    >
+                      {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          </>
         )}
       </AnimatePresence>
     </div>
