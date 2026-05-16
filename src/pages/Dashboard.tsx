@@ -40,8 +40,10 @@ import {
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { usageService } from "../services/usageService";
+import { useToolCategoryOverride } from "../services/adminService";
+import { useTools } from "../context/ToolContext";
 
-type Tool = {
+export type Tool = {
   id: string;
   name: string;
   description: string;
@@ -51,42 +53,7 @@ type Tool = {
   inDevelopment?: boolean;
 };
 
-export function Dashboard() {
-  const navigate = useNavigate();
-  const [selectedCategory, setSelectedCategory] = useState<string>("All Tools");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [favorites, setFavorites] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem("favorite-tools");
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-  const [usageData, setUsageData] = useState<Record<string, number>>({});
-
-  useEffect(() => {
-    localStorage.setItem("favorite-tools", JSON.stringify(favorites));
-  }, [favorites]);
-
-  useEffect(() => {
-    const fetchUsage = async () => {
-      const data = await usageService.getAllUsage();
-      setUsageData(data);
-    };
-    fetchUsage();
-  }, []);
-
-  const toggleFavorite = (toolId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setFavorites(prev => 
-      prev.includes(toolId) 
-        ? prev.filter(id => id !== toolId)
-        : [...prev, toolId]
-    );
-  };
-
-  const tools: Tool[] = [
+export const DEFAULT_TOOLS: Tool[] = [
     { id: 'api-tester', name: 'API Tester', description: 'Test REST APIs with proxy support.', category: 'Utility', icon: Globe, inDevelopment: true },
     { id: 'audio-visualiser', name: 'Audio Visualiser', description: 'Convert MP3 to animated sound wave videos.', category: ['Social', 'Utility'], icon: MonitorPlay, inDevelopment: true },
     { id: 'background-remover', name: 'BG Remover', description: 'AI background removal.', category: ['Image & Photo', 'AI Tools'], icon: Image, isPopular: true, inDevelopment: true },
@@ -131,7 +98,45 @@ export function Dashboard() {
     { id: 'whatsapp-s-create', name: 'WA Sticker', description: 'Create WhatsApp stickers.', category: 'Social', icon: MessageSquare },
     { id: 'word-counter', name: 'Word Counter', description: 'Count words, chars, and paragraphs.', category: 'Utility', icon: FileText },
     { id: 'youtube-multiview', name: 'YouTube Multi-View', description: 'Play one video in multiple instances simultaneously.', category: 'Social', icon: Youtube, isPopular: true, inDevelopment: true },
-  ];
+];
+
+export function Dashboard() {
+  const navigate = useNavigate();
+  const [selectedCategory, setSelectedCategory] = useState<string>("All Tools");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [favorites, setFavorites] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem("favorite-tools");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [usageData, setUsageData] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    localStorage.setItem("favorite-tools", JSON.stringify(favorites));
+  }, [favorites]);
+
+  useEffect(() => {
+    const fetchUsage = async () => {
+      const data = await usageService.getAllUsage();
+      setUsageData(data);
+    };
+    fetchUsage();
+  }, []);
+
+  const toggleFavorite = (toolId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFavorites(prev => 
+      prev.includes(toolId) 
+        ? prev.filter(id => id !== toolId)
+        : [...prev, toolId]
+    );
+  };
+
+  // Use custom hook to override categories from Supabase (or localStorage fallback)
+  const { tools } = useToolCategoryOverride(DEFAULT_TOOLS);
 
   const handleExecute = (tool: Tool) => {
     const toolName = (tool.name || "").trim();

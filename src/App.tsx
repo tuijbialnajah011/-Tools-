@@ -55,6 +55,7 @@ import VideoFrameExtractor from "./pages/VideoFrameExtractor";
 import BulkImageCropper from "./pages/BulkImageCropper";
 import SvgPatternGenerator from "./pages/SvgPatternGenerator";
 import { HtmlToApk } from "./pages/HtmlToApk";
+import { AdminPanel } from "./pages/AdminPanel";
 
 export default function App() {
   return (
@@ -63,6 +64,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Layout />}>
             <Route index element={<Dashboard />} />
+            <Route path="admin" element={<AdminPanel />} />
             <Route path="themes" element={<Themes />} />
             <Route path="background-remover" element={<BackgroundRemover />} />
             <Route path="qr-code-generator" element={<QrGenerator />} />

@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { LogIn, LogOut, User as UserIcon, X, Mail, Lock } from 'lucide-react';
+import { LogIn, LogOut, User as UserIcon, X, Mail, Lock, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { checkIsAdmin } from '../services/adminService';
+import { useNavigate } from 'react-router-dom';
 
 export function HeaderAuth() {
+  const navigate = useNavigate();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
@@ -19,14 +23,26 @@ export function HeaderAuth() {
 
   useEffect(() => {
     // Check active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setUser(session?.user || null);
+      if (session?.user) {
+        const adminStatus = await checkIsAdmin();
+        setIsAdmin(adminStatus);
+      } else {
+        setIsAdmin(false);
+      }
       setLoading(false);
     });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user || null);
+      if (session?.user) {
+        const adminStatus = await checkIsAdmin();
+        setIsAdmin(adminStatus);
+      } else {
+        setIsAdmin(false);
+      }
       setLoading(false);
     });
 
@@ -134,6 +150,17 @@ export function HeaderAuth() {
               <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-700 mb-1 truncate">
                 {user.email}
               </div>
+              
+              {isAdmin && (
+                <button 
+                  onClick={() => navigate('/admin')}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors mb-1"
+                >
+                  <Shield className="w-4 h-4" />
+                  <span>Admin Panel</span>
+                </button>
+              )}
+
               <button 
                 onClick={handleLogout}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
