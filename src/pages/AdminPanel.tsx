@@ -9,7 +9,7 @@ import { supabase } from '../lib/supabase';
 export function AdminPanel() {
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
-  const [toolsState, setToolsState] = useState<{toolId: string; toolName: string; currentCategories: string[]}[]>([]);
+  const [toolsState, setToolsState] = useState<{toolId: string; toolName: string; currentCategories: string[]; isHidden: boolean}[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [message, setMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
@@ -42,11 +42,27 @@ export function AdminPanel() {
       setIsAdmin(allowed);
       if (allowed) {
         const overrides = await fetchToolCategories();
-        const mapped = DEFAULT_TOOLS.map(t => ({
-          toolId: t.id,
-          toolName: t.name,
-          currentCategories: overrides[t.id] ? overrides[t.id] : (Array.isArray(t.category) ? t.category : [t.category])
-        }));
+        const mapped = DEFAULT_TOOLS.map(t => {
+          let overrideCats;
+          let isHidden = false;
+          if (overrides[t.id]) {
+            const overrideVal = overrides[t.id] as any;
+            if (Array.isArray(overrideVal)) {
+              overrideCats = overrideVal;
+            } else {
+              overrideCats = overrideVal.categories;
+              isHidden = overrideVal.is_hidden || false;
+            }
+          } else {
+            overrideCats = Array.isArray(t.category) ? t.category : [t.category];
+          }
+          return {
+            toolId: t.id,
+            toolName: t.name,
+            currentCategories: overrideCats,
+            isHidden
+          };
+        });
         setToolsState(mapped);
       }
       setLoading(false);
@@ -82,6 +98,12 @@ export function AdminPanel() {
     );
   }
 
+  const handleToggleHide = (toolId: string) => {
+    setToolsState(prev => prev.map(t => 
+      t.toolId === toolId ? { ...t, isHidden: !t.isHidden } : t
+    ));
+  };
+
   const handleToggleCategory = (toolId: string, category: string) => {
     setToolsState(prev => prev.map(t => {
       if (t.toolId === toolId) {
@@ -99,9 +121,9 @@ export function AdminPanel() {
     }));
   };
 
-  const handleSave = async (toolId: string, categories: string[]) => {
+  const handleSave = async (toolId: string, categories: string[], isHidden: boolean) => {
     setSaving(toolId);
-    const success = await updateToolCategory(toolId, categories);
+    const success = await updateToolCategory(toolId, categories, isHidden);
     
     if (success) {
       setMessage({ type: 'success', text: 'Tool category updated! Will sync for all users.' });
@@ -163,7 +185,8 @@ export function AdminPanel() {
                   <pre className="mt-2 p-2 bg-slate-100 dark:bg-slate-900 rounded overflow-x-auto select-all">
 {`CREATE TABLE IF NOT EXISTS tool_categories (
   tool_id TEXT PRIMARY KEY,
-  categories JSONB NOT NULL
+  categories JSONB NOT NULL,
+  is_hidden BOOLEAN DEFAULT false
 );`}
                   </pre>
                 </details>
@@ -193,7 +216,19 @@ export function AdminPanel() {
               <div key={tool.toolId} className="p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div className="flex-1">
-                    <span className="font-medium text-slate-900 dark:text-white mb-2 block">{tool.toolName}</span>
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="font-medium text-slate-900 dark:text-white">{tool.toolName}</span>
+                      <button
+                        onClick={() => handleToggleHide(tool.toolId)}
+                        className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
+                          tool.isHidden 
+                            ? 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-800' 
+                            : 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800'
+                        }`}
+                      >
+                        {tool.isHidden ? 'Hidden' : 'Visible'}
+                      </button>
+                    </div>
                     <div className="flex flex-wrap gap-2">
                       {ALL_CATEGORIES.map(cat => (
                         <button
@@ -211,7 +246,7 @@ export function AdminPanel() {
                     </div>
                   </div>
                   <button
-                    onClick={() => handleSave(tool.toolId, tool.currentCategories)}
+                    onClick={() => handleSave(tool.toolId, tool.currentCategories, tool.isHidden)}
                     disabled={saving === tool.toolId}
                     className="flex-shrink-0 self-start md:self-center flex items-center justify-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:hover:bg-slate-100 dark:text-slate-900 rounded-lg transition-colors disabled:opacity-50"
                   >

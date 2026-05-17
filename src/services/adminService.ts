@@ -24,10 +24,10 @@ export async function fetchToolCategories(): Promise<Record<string, string[]>> {
     }
     
     // Supabase success
-    const mapping: Record<string, string[]> = {};
+    const mapping: Record<string, { categories: string[], is_hidden: boolean }> = {};
     if (data) {
       data.forEach((row: any) => {
-        mapping[row.tool_id] = row.categories;
+        mapping[row.tool_id] = { categories: row.categories, is_hidden: row.is_hidden || false };
       });
       // cache locally
       localStorage.setItem('tool_categories_override', JSON.stringify(mapping));
@@ -39,12 +39,13 @@ export async function fetchToolCategories(): Promise<Record<string, string[]>> {
   }
 }
 
-export async function updateToolCategory(toolId: string, categories: string[]): Promise<boolean> {
+export async function updateToolCategory(toolId: string, categories: string[], is_hidden: boolean = false): Promise<boolean> {
   try {
-    console.log("Updating tool category in Supabase:", toolId, categories);
+    console.log("Updating tool category in Supabase:", toolId, categories, is_hidden);
     const { error } = await supabase.from('tool_categories').upsert({
       tool_id: toolId,
-      categories: categories
+      categories: categories,
+      is_hidden: is_hidden
     });
     
     if (error) {
@@ -54,7 +55,7 @@ export async function updateToolCategory(toolId: string, categories: string[]): 
     // Always update locally for immediate UX
     const localStr = localStorage.getItem('tool_categories_override');
     const localMap = localStr ? JSON.parse(localStr) : {};
-    localMap[toolId] = categories;
+    localMap[toolId] = { categories, is_hidden };
     localStorage.setItem('tool_categories_override', JSON.stringify(localMap));
     
     // Trigger custom event so Dashboard can reload
@@ -76,11 +77,15 @@ export function useToolCategoryOverride(defaultTools: any[]) {
       if (!_mounted) return;
       const newTools = defaultTools.map(t => {
         if (overrides[t.id]) {
-          return { ...t, category: overrides[t.id] };
+          const overrideValue = overrides[t.id];
+          if (Array.isArray(overrideValue)) { // backwards compatibility for local storage
+            return { ...t, category: overrideValue };
+          }
+          return { ...t, category: overrideValue.categories, is_hidden: overrideValue.is_hidden };
         }
         return t;
       });
-      setTools(newTools);
+      setTools(newTools.filter(t => !t.is_hidden));
     };
 
     loadOverrides();
