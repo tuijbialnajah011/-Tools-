@@ -124,14 +124,15 @@ export function Layout() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
               className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
               onClick={closeSidebar}
             />
             <motion.div
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
               className="relative w-full max-w-sm glass border border-slate-200/50 dark:border-slate-800/50 rounded-[2rem] shadow-2xl flex flex-col"
             >
               <div className="p-6 border-b border-slate-200/50 dark:border-slate-800/50 flex items-center justify-between bg-white/50 dark:bg-slate-900/50 rounded-t-[2rem]">
