@@ -1,7 +1,9 @@
 {
-  "name": "react-example",
+  "name": "bje-tools",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.0.0",
+  "author": "BJE Clan",
+  "description": "A powerful suite of productivity and creative tools by BJE Clan",
   "type": "module",
   "engines": {
     "node": "20.x"

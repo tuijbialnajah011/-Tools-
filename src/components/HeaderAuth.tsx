@@ -141,7 +141,14 @@ export function HeaderAuth() {
       ) : user ? (
         <div className="relative" ref={dropdownRef}>
           <button 
-            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            onClick={() => {
+              if (isAdmin) {
+                navigate('/admin');
+                setIsDropdownOpen(false);
+              } else {
+                setIsDropdownOpen(!isDropdownOpen);
+              }
+            }}
             className="flex items-center gap-2 p-1 pl-3 pr-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full shadow-sm hover:shadow-md transition-all active:scale-95"
           >
             <span className="text-sm font-medium text-slate-700 dark:text-slate-200 max-w-[150px] truncate">

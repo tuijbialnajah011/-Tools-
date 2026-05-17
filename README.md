@@ -1,23 +1,44 @@
-# Image Dataset Collector
+# 𝙱𝙹𝙴 ~ Tools
 
-A high-quality, Pinterest-style aesthetic image dataset collector.
+A powerful suite of productivity and creative tools including AI generation, image processing, and document utilities.
 
-## Netlify Deployment
+## Powered by 𝙱𝙹𝙴 ~ Clan
 
-This project is configured for easy deployment to Netlify.
+This platform is proudly developed and maintained by the **𝙱𝙹𝙴 ~ Clan**. 
+We focus on delivering high-quality, aesthetic, and functional tools for modern workflows.
 
-### Steps to Deploy:
+### Features
 
-1.  **Connect to GitHub:** Push your code to a GitHub repository.
-2.  **Create a New Site on Netlify:** Connect your GitHub repository to Netlify.
-3.  **Build Settings:**
-    *   **Build Command:** `npm run build`
-    *   **Publish Directory:** `dist`
-    *   **Functions Directory:** `netlify/functions`
-4.  **Redirects:** The `netlify.toml` and `public/_redirects` files handle SPA routing and API proxying automatically.
+*   **Extensive Toolset:** A comprehensive collection of tools ranging from AI utilities to advanced image processing.
+*   **Cinematic Experience:** Carefully crafted UI/UX tailored for the best experience.
+*   **Open Architecture:** Designed for continuous expansion and easy feature additions.
+*   **High Performance:** Optimized for speed and reliability.
 
-### Features:
-*   **Pinterest-style Masonry Layout:** Beautiful staggered image grid.
-*   **Aesthetic Search:** Automatically enhances queries for Pinterest-like results.
-*   **Dataset Collection:** Download images in bulk as a ZIP file.
-*   **Serverless API:** Backend logic is handled by Netlify Functions for seamless deployment.
+### Deployment
+
+This project is configured for deployment on any standard Node.js hosting environment (like Vercel, Netlify, or any VPS).
+
+#### Setup Instructions:
+
+1.  **Clone the Repository:**
+    ```bash
+    git clone <your-repository-url>
+    cd bje-tools
+    ```
+2.  **Install Dependencies:**
+    ```bash
+    npm install
+    ```
+3.  **Environment Setup:**
+    Create a `.env` file based on `.env.example` and add your keys (e.g., Supabase configurations).
+4.  **Run Locally:**
+    ```bash
+    npm run dev
+    ```
+5.  **Build for Production:**
+    ```bash
+    npm run build
+    ```
+
+---
+*Built with passion by 𝙱𝙹𝙴 ~ Clan.*

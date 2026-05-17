@@ -215,7 +215,7 @@ export default function ColorPalette() {
     // Add footer
     ctx.fillStyle = '#94a3b8'; // slate-400
     ctx.font = '24px Inter, sans-serif';
-    ctx.fillText('Generated with AI Studio', canvas.width / 2, canvas.height - 40);
+    ctx.fillText('Generated with 𝙱𝙹𝙴 ~ Tools', canvas.width / 2, canvas.height - 40);
 
     // Trigger download
     const link = document.createElement('a');
