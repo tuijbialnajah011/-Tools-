@@ -69,6 +69,10 @@ export function Layout() {
 
   const reportBugUrl = "https://chat.whatsapp.com/BBaVVm1n2WI4kzMcoeTqyl?mode=gi_t";
 
+  useEffect(() => {
+    setIsSidebarOpen(false);
+  }, [location.pathname]);
+
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
   const closeSidebar = () => setIsSidebarOpen(false);
 
@@ -96,7 +100,6 @@ export function Layout() {
           <span className="text-lg font-semibold text-slate-900 dark:text-white">𝙱𝙹𝙴 ~ Tools</span>
         </div>
         <div className="flex items-center space-x-2">
-          <HeaderAuth />
           <button
             onClick={toggleTheme}
             className="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
@@ -129,12 +132,11 @@ export function Layout() {
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="relative w-full max-w-sm glass border border-slate-200/50 dark:border-slate-800/50 rounded-[2rem] shadow-2xl overflow-hidden flex flex-col"
+              className="relative w-full max-w-sm glass border border-slate-200/50 dark:border-slate-800/50 rounded-[2rem] shadow-2xl flex flex-col"
             >
-              <div className="p-6 border-b border-slate-200/50 dark:border-slate-800/50 flex items-center justify-between bg-white/50 dark:bg-slate-900/50">
+              <div className="p-6 border-b border-slate-200/50 dark:border-slate-800/50 flex items-center justify-between bg-white/50 dark:bg-slate-900/50 rounded-t-[2rem]">
                 <div className="flex items-center">
-                  <Wrench className="w-6 h-6 text-indigo-600 mr-2" />
-                  <span className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">𝙱𝙹𝙴 ~ Menu</span>
+                  <HeaderAuth />
                 </div>
                 <button
                   onClick={closeSidebar}

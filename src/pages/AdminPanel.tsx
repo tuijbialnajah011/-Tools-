@@ -4,6 +4,7 @@ import { Settings, Save, AlertCircle, CheckCircle2, GripVertical } from 'lucide-
 import { DEFAULT_TOOLS, Tool } from './Dashboard';
 import { checkIsAdmin, fetchToolCategories, updateToolCategory } from '../services/adminService';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 
 export function AdminPanel() {
   const navigate = useNavigate();
@@ -12,15 +13,32 @@ export function AdminPanel() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [message, setMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
 
-  // Derive categories from DEFAULT_TOOLS
-  const ALL_CATEGORIES = Array.from(new Set(
-    DEFAULT_TOOLS.flatMap(t => Array.isArray(t.category) ? t.category : [t.category])
-  )).sort();
+  // Derive categories from DEFAULT_TOOLS and toolsState
+  const ALL_CATEGORIES = Array.from(new Set([
+    ...DEFAULT_TOOLS.flatMap(t => Array.isArray(t.category) ? t.category : [t.category]),
+    ...toolsState.flatMap(t => t.currentCategories),
+    ...customCategories
+  ])).sort();
+
+  const handleAddGlobalCategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCategoryName.trim()) return;
+    const cat = newCategoryName.trim();
+    if (!ALL_CATEGORIES.includes(cat)) {
+      setCustomCategories(prev => [...prev, cat]);
+    }
+    setNewCategoryName("");
+  };
 
   useEffect(() => {
     const init = async () => {
-      const allowed = await checkIsAdmin();
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUserLocal = session?.user;
+      const email = currentUserLocal?.email;
+      const allowed = checkIsAdmin(email);
       setIsAdmin(allowed);
       if (allowed) {
         const overrides = await fetchToolCategories();
@@ -136,17 +154,38 @@ export function AdminPanel() {
 
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
           <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-            <h3 className="font-semibold text-slate-900 dark:text-white">Tool Category Assignments</h3>
-            <p className="text-sm text-slate-500">Note: You must have created the `tool_categories` table in Supabase for this to persist globally.</p>
-            <details className="mt-2 text-xs text-slate-500 cursor-pointer">
-              <summary>Show Supabase SQL Snippet</summary>
-              <pre className="mt-2 p-2 bg-slate-100 dark:bg-slate-900 rounded overflow-x-auto select-all">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="font-semibold text-slate-900 dark:text-white">Tool Category Assignments</h3>
+                <p className="text-sm text-slate-500">Note: You must have created the `tool_categories` table in Supabase for this to persist globally.</p>
+                <details className="mt-2 text-xs text-slate-500 cursor-pointer">
+                  <summary>Show Supabase SQL Snippet</summary>
+                  <pre className="mt-2 p-2 bg-slate-100 dark:bg-slate-900 rounded overflow-x-auto select-all">
 {`CREATE TABLE IF NOT EXISTS tool_categories (
   tool_id TEXT PRIMARY KEY,
   categories JSONB NOT NULL
 );`}
-              </pre>
-            </details>
+                  </pre>
+                </details>
+              </div>
+              
+              <form onSubmit={handleAddGlobalCategory} className="flex items-center gap-2">
+                <input 
+                  type="text" 
+                  value={newCategoryName}
+                  onChange={e => setNewCategoryName(e.target.value)}
+                  placeholder="New filter name..."
+                  className="px-3 py-1.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                />
+                <button 
+                  type="submit"
+                  disabled={!newCategoryName.trim()}
+                  className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-3 py-1.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
+                >
+                  Add Filter
+                </button>
+              </form>
+            </div>
           </div>
 
           <div className="divide-y divide-slate-100 dark:divide-slate-800">

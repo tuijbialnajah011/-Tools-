@@ -9,10 +9,9 @@ export const ADMIN_EMAILS = [
   'nadiaparveen1526@gmail.com'
 ];
 
-export async function checkIsAdmin(): Promise<boolean> {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user?.email) return false;
-  return ADMIN_EMAILS.includes(session.user.email.toLowerCase());
+export function checkIsAdmin(email: string | undefined | null): boolean {
+  if (!email) return false;
+  return ADMIN_EMAILS.includes(email.toLowerCase());
 }
 
 export async function fetchToolCategories(): Promise<Record<string, string[]>> {

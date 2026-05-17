@@ -26,30 +26,28 @@ export function HeaderAuth() {
 
   useEffect(() => {
     // Check active session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setUser(session?.user || null);
-      if (session?.user) {
-        const adminStatus = await checkIsAdmin();
-        setIsAdmin(adminStatus);
-      } else {
-        setIsAdmin(false);
-      }
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) throw error;
+      const currentUser = session?.user || null;
+      setUser(currentUser);
+      setIsAdmin(checkIsAdmin(currentUser?.email));
+      setLoading(false);
+    }).catch(err => {
+      console.error("Failed to get session:", err);
       setLoading(false);
     });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setUser(session?.user || null);
-      if (session?.user) {
-        const adminStatus = await checkIsAdmin();
-        setIsAdmin(adminStatus);
-      } else {
-        setIsAdmin(false);
-      }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const currentUser = session?.user || null;
+      setUser(currentUser);
+      setIsAdmin(checkIsAdmin(currentUser?.email));
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -139,61 +137,55 @@ export function HeaderAuth() {
       {loading ? (
         <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-indigo-600 animate-spin" />
       ) : user ? (
-        <div className="relative" ref={dropdownRef}>
-          <button 
-            onClick={() => {
-              if (isAdmin) {
-                navigate('/admin');
-                setIsDropdownOpen(false);
-              } else {
-                setIsDropdownOpen(!isDropdownOpen);
-              }
-            }}
-            className="flex items-center gap-2 p-1 pl-3 pr-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full shadow-sm hover:shadow-md transition-all active:scale-95"
-          >
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-200 max-w-[150px] truncate">
-              {user.email}
-            </span>
-            <div className="w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 pointer-events-none">
-              <UserIcon className="w-3.5 h-3.5" />
-            </div>
-          </button>
-          
-          <AnimatePresence>
-            {isDropdownOpen && (
-              <motion.div 
-                initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                transition={{ duration: 0.15 }}
-                className="absolute right-0 top-full mt-2 w-48 z-[100] isolate origin-top-right"
-              >
-            <div className="p-2 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700">
-              <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-700 mb-1 truncate">
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <button 
+              onClick={() => navigate('/admin')}
+              className="flex items-center gap-1.5 p-1.5 px-3 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-400 dark:hover:bg-indigo-900/50 border border-indigo-200 dark:border-indigo-800/50 rounded-full shadow-sm hover:shadow-md transition-all active:scale-95 text-xs font-bold"
+            >
+              <Shield className="w-3.5 h-3.5" />
+              <span>Admin</span>
+            </button>
+          )}
+          <div className="relative" ref={dropdownRef}>
+            <button 
+              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              className="flex items-center gap-2 p-1 pl-3 pr-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full shadow-sm hover:shadow-md transition-all active:scale-95"
+            >
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-200 max-w-[150px] truncate">
                 {user.email}
+              </span>
+              <div className="w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 pointer-events-none">
+                <UserIcon className="w-3.5 h-3.5" />
               </div>
-              
-              {isAdmin && (
-                <button 
-                  onClick={() => navigate('/admin')}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors mb-1"
+            </button>
+            
+            <AnimatePresence>
+              {isDropdownOpen && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute right-0 top-full mt-2 w-48 z-[100] isolate origin-top-right"
                 >
-                  <Shield className="w-4 h-4" />
-                  <span>Admin Panel</span>
+              <div className="p-2 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700">
+                <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-700 mb-1 truncate">
+                  {user.email}
+                </div>
+                
+                <button 
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Sign Out</span>
                 </button>
+              </div>
+                </motion.div>
               )}
-
-              <button 
-                onClick={handleLogout}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-              >
-                <LogOut className="w-4 h-4" />
-                <span>Sign Out</span>
-              </button>
-            </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+            </AnimatePresence>
+          </div>
         </div>
       ) : (
         <button 
