@@ -236,27 +236,27 @@ export function Layout() {
       {/* Desktop Sidebar */}
       <aside
         className={cn(
-          "hidden md:flex w-64 glass border-r border-slate-200/50 dark:border-slate-800/50 flex-col h-screen sticky top-0",
+          "hidden md:flex w-52 glass border-r border-slate-200/50 dark:border-slate-800/50 flex-col h-screen sticky top-0",
         )}
       >
-        <div className="h-16 hidden md:flex items-center justify-between px-6 border-b border-slate-200/50 dark:border-slate-800/50">
-          <div className="flex items-center">
-            <Wrench className="w-6 h-6 text-indigo-600 mr-2" />
-            <span className="text-lg font-semibold text-slate-900 dark:text-white">𝙱𝙹𝙴 ~ Tools</span>
+        <div className="h-14 hidden md:flex flex-row items-center justify-between px-3 border-b border-slate-200/50 dark:border-slate-800/50">
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            <Wrench className="w-4 h-4 text-indigo-600 shrink-0" />
+            <span className="text-sm font-semibold text-slate-900 dark:text-white truncate">𝙱𝙹𝙴 Tools</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 shrink-0">
             <HeaderAuth />
             <button
               onClick={toggleTheme}
-              className="p-1.5 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
+              className="p-1 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
               title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
             >
-              {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
           </div>
         </div>
 
-        <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           {navItems.map((item, idx) => {
             const isActive = location.pathname === item.href;
             return (
@@ -364,7 +364,7 @@ export function Layout() {
 
       {/* Main content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-transparent relative z-10">
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 relative flex flex-col custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 relative flex flex-col custom-scrollbar">
           {location.pathname !== '/' && (
             <div className="mb-6 flex-shrink-0 flex items-center">
               <Link 

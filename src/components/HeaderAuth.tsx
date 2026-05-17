@@ -150,14 +150,14 @@ export function HeaderAuth() {
           <div className="relative" ref={dropdownRef}>
             <button 
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className="flex items-center gap-2 p-1 pl-3 pr-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full shadow-sm hover:shadow-md transition-all active:scale-95"
+              className="flex items-center gap-1.5 p-1 pl-2 pr-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md transition-all active:scale-95"
             >
-              <span className="text-sm font-medium text-slate-700 dark:text-slate-200 max-w-[150px] truncate">
-                {user.email}
-              </span>
-              <div className="w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 pointer-events-none">
+              <div className="w-6 h-6 rounded-md bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 pointer-events-none">
                 <UserIcon className="w-3.5 h-3.5" />
               </div>
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 max-w-[120px] truncate">
+                {user.email}
+              </span>
             </button>
             
             <AnimatePresence>
