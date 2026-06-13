@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig, loadEnv} from 'vite';
 
+import { VitePWA } from 'vite-plugin-pwa';
+
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   
@@ -27,7 +29,36 @@ export default defineConfig(({mode}) => {
   
   return {
     base: '/',
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(), 
+      tailwindcss(),
+      VitePWA({
+        registerType: 'autoUpdate',
+        workbox: {
+          maximumFileSizeToCacheInBytes: 15 * 1024 * 1024 // 15MB limit
+        },
+        manifest: {
+          name: '𝙱𝙹𝙴 Cinematic Tools',
+          short_name: 'BJE Tools',
+          description: 'A comprehensive suite of web tools',
+          theme_color: '#4f46e5',
+          background_color: '#0f172a',
+          display: 'standalone',
+          icons: [
+            {
+              src: 'https://i.postimg.cc/rFjLz7jL/IMG-20260613-WA0084.jpg',
+              sizes: '192x192',
+              type: 'image/jpeg'
+            },
+            {
+              src: 'https://i.postimg.cc/rFjLz7jL/IMG-20260613-WA0084.jpg',
+              sizes: '512x512',
+              type: 'image/jpeg'
+            }
+          ]
+        }
+      })
+    ],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(GEMINI_API_KEY),
       'process.env.API_KEY': JSON.stringify(GEMINI_API_KEY),
