@@ -275,7 +275,7 @@ export function Layout() {
         <div className="h-14 hidden md:flex flex-row items-center justify-between px-3 border-b border-slate-200/50 dark:border-slate-800/50">
           <div className="flex items-center gap-1.5 flex-1 min-w-0">
             <Wrench className="w-4 h-4 text-indigo-600 shrink-0" />
-            <span className="text-sm font-semibold text-slate-900 dark:text-white truncate">𝙱𝙹𝙴 Tools</span>
+            <span className="text-sm font-semibold text-slate-900 dark:text-white truncate">𝙱𝙹𝙴 ~ Tools</span>
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <HeaderAuth />

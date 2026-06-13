@@ -42,7 +42,7 @@ export default defineConfig(({mode}) => {
           maximumFileSizeToCacheInBytes: 15 * 1024 * 1024 // 15MB limit
         },
         manifest: {
-          name: '𝙱𝙹𝙴 Cinematic Tools',
+          name: '𝙱𝙹𝙴 ~ Tools',
           short_name: 'BJE Tools',
           description: 'A comprehensive suite of web tools',
           theme_color: '#4f46e5',
