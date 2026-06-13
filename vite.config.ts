@@ -34,6 +34,7 @@ export default defineConfig(({mode}) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
+        injectRegister: 'auto',
         workbox: {
           maximumFileSizeToCacheInBytes: 15 * 1024 * 1024 // 15MB limit
         },
@@ -46,12 +47,12 @@ export default defineConfig(({mode}) => {
           display: 'standalone',
           icons: [
             {
-              src: 'https://i.postimg.cc/rFjLz7jL/IMG-20260613-WA0084.jpg',
+              src: '/favicon.jpg',
               sizes: '192x192',
               type: 'image/jpeg'
             },
             {
-              src: 'https://i.postimg.cc/rFjLz7jL/IMG-20260613-WA0084.jpg',
+              src: '/favicon.jpg',
               sizes: '512x512',
               type: 'image/jpeg'
             }
