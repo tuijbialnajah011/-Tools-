@@ -6,10 +6,12 @@ import App from "./App.tsx";
 // Register Service Worker
 const updateSW = registerSW({
   onNeedRefresh() {
-    // maybe prompt user to refresh
+    if (confirm("New update available! Reload to update?")) {
+      updateSW(true);
+    }
   },
   onOfflineReady() {
-    // ready to work offline
+    console.log("App is ready to work offline.");
   },
 });
 import "./index.css";

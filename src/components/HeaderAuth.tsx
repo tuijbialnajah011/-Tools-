@@ -27,12 +27,24 @@ export function HeaderAuth() {
   useEffect(() => {
     // Check active session
     supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) throw error;
+      if (error) {
+        if (error.message.includes('Lock') || error.message.includes('stole it') || error.message.includes('steal')) {
+          // ignore concurrent lock grab errors in React Strict Mode
+          console.warn("Supabase session lock message suppressed.");
+          return;
+        }
+        throw error;
+      }
       const currentUser = session?.user || null;
       setUser(currentUser);
       setIsAdmin(checkIsAdmin(currentUser?.email));
       setLoading(false);
     }).catch(err => {
+      if (err?.message?.includes('Lock') || err?.message?.includes('broken') || err?.message?.includes('steal')) {
+         // ignore
+         console.warn("Supabase session lock message suppressed.");
+         return;
+      }
       console.error("Failed to get session:", err);
       setLoading(false);
     });
