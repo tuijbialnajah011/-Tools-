@@ -4,7 +4,7 @@ import { useTools } from "../context/ToolContext";
 import { ToolManager } from "./ToolManager";
 import { ThemeEffects } from "./ThemeEffects";
 import { motion, AnimatePresence } from "framer-motion";
-import { LayoutDashboard, Wrench, Menu, X, Sun, Moon, Image, Maximize, Palette, QrCode, FileCode, Terminal, FileText, MessageCircle, Activity, Video, AlertCircle, TrendingUp } from "lucide-react";
+import { LayoutDashboard, Wrench, Menu, X, Sun, Moon, Image, Maximize, Palette, QrCode, FileCode, Terminal, FileText, MessageCircle, Activity, Video, AlertCircle, TrendingUp, Download } from "lucide-react";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { usageService } from "../services/usageService";
@@ -30,6 +30,7 @@ export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== "undefined") {
       return (
@@ -50,6 +51,22 @@ export function Layout() {
       localStorage.setItem("theme", "light");
     }
   }, [isDarkMode]);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    setDeferredPrompt(null);
+  };
 
   // Track tool usage on route change
   useEffect(() => {
@@ -216,6 +233,21 @@ export function Layout() {
                   </>
                 )}
 
+                {deferredPrompt && (
+                  <div className="pt-2 pb-2">
+                    <button
+                      onClick={() => {
+                        handleInstallClick();
+                        closeSidebar();
+                      }}
+                      className="w-full flex items-center px-4 py-3 text-sm font-bold rounded-2xl transition-all text-white bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-md shadow-indigo-500/20"
+                    >
+                      <Download className="w-5 h-5 mr-3" />
+                      Install App
+                    </button>
+                  </div>
+                )}
+
                 <div className="pt-6">
                   <a
                     href={reportBugUrl}
@@ -338,6 +370,18 @@ export function Layout() {
                 );
               })}
             </>
+          )}
+
+          {deferredPrompt && (
+            <div className="pt-2 pb-2">
+              <button
+                onClick={handleInstallClick}
+                className="w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-all text-white bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-sm"
+              >
+                <Download className="w-5 h-5 mr-3" />
+                Install App
+              </button>
+            </div>
           )}
 
           <div className="pt-6">

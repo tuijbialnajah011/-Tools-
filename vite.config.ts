@@ -35,6 +35,9 @@ export default defineConfig(({mode}) => {
       VitePWA({
         registerType: 'autoUpdate',
         injectRegister: 'auto',
+        devOptions: {
+          enabled: true
+        },
         workbox: {
           maximumFileSizeToCacheInBytes: 15 * 1024 * 1024 // 15MB limit
         },
@@ -47,14 +50,16 @@ export default defineConfig(({mode}) => {
           display: 'standalone',
           icons: [
             {
-              src: '/favicon.jpg',
+              src: '/favicon-192x192.png',
               sizes: '192x192',
-              type: 'image/jpeg'
+              type: 'image/png',
+              purpose: 'any maskable'
             },
             {
-              src: '/favicon.jpg',
+              src: '/favicon-512x512.png',
               sizes: '512x512',
-              type: 'image/jpeg'
+              type: 'image/png',
+              purpose: 'any maskable'
             }
           ]
         }
