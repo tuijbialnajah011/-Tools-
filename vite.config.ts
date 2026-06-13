@@ -48,6 +48,7 @@ export default defineConfig(({mode}) => {
           theme_color: '#4f46e5',
           background_color: '#0f172a',
           display: 'standalone',
+          start_url: '/',
           icons: [
             {
               src: '/favicon-192x192.png',
